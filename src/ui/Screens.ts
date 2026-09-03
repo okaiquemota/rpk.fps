@@ -4,6 +4,8 @@ export interface Settings {
   sensitivity: number;
   fov: number;
   volume: number;
+  /** Girar a camera ao levar o mouse ate' a borda (so' vale sem pointer lock). */
+  edgeTurn: boolean;
 }
 
 export interface SaveData {
@@ -13,7 +15,7 @@ export interface SaveData {
 }
 
 const DEFAULTS: SaveData = {
-  settings: { sensitivity: 1, fov: 85, volume: 0.7 },
+  settings: { sensitivity: 1, fov: 85, volume: 0.7, edgeTurn: true },
   bestWave: 0,
   bestScore: 0,
 };
@@ -88,10 +90,12 @@ export class Screens {
     const sens = $<HTMLInputElement>('sens-slider');
     const fov = $<HTMLInputElement>('fov-slider');
     const vol = $<HTMLInputElement>('vol-slider');
+    const edge = $<HTMLInputElement>('edge-toggle');
 
     sens.value = String(s.sensitivity);
     fov.value = String(s.fov);
     vol.value = String(Math.round(s.volume * 100));
+    edge.checked = s.edgeTurn;
     this.refreshSliderLabels();
 
     const emit = (): void => {
@@ -99,6 +103,7 @@ export class Screens {
         sensitivity: Number(sens.value),
         fov: Number(fov.value),
         volume: Number(vol.value) / 100,
+        edgeTurn: edge.checked,
       };
       this.refreshSliderLabels();
       this.onSettingsChange?.(this.save.settings);
@@ -106,6 +111,7 @@ export class Screens {
     };
 
     for (const el of [sens, fov, vol]) el.addEventListener('input', emit);
+    edge.addEventListener('change', emit);
   }
 
   private refreshSliderLabels(): void {

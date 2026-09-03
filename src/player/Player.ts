@@ -106,6 +106,7 @@ export class Player {
   /** Quanto do giro de borda esta' ativo neste eixo, em [-1, 1]. */
   edgeTurnX = 0;
   edgeTurnY = 0;
+  edgeTurnEnabled = true;
 
   updateLook(input: Input, dt: number): void {
     const scale = 0.0022 * this.sensitivity * (1 - this.adsAmount * 0.35);
@@ -124,7 +125,11 @@ export class Player {
     // sozinho, entao da' pra dar a volta completa.
     this.edgeTurnX = 0;
     this.edgeTurnY = 0;
-    if (input.fallback && input.pointerInside) {
+    // Girar exige mouse EM MOVIMENTO. Sem isso, largar o cursor perto da borda
+    // deixava a tela girando sozinha — que e' exatamente o que nao se espera de
+    // um jogo parado.
+    const pointerActive = input.secondsSincePointerMove < EDGE_IDLE_TIMEOUT;
+    if (this.edgeTurnEnabled && input.fallback && input.pointerInside && pointerActive) {
       this.edgeTurnX = edgeRamp(input.pointerNX);
       this.edgeTurnY = edgeRamp(input.pointerNY);
       const speed = EDGE_TURN_SPEED * this.sensitivity * (1 - this.adsAmount * 0.4) * dt;
@@ -370,7 +375,9 @@ const lerpZoom = (zoom: number, t: number): number => 1 + (zoom - 1) * t;
 /** Radianos por segundo no extremo da tela. */
 const EDGE_TURN_SPEED = 3.4;
 /** Fracao central da tela onde o giro de borda nao age. */
-const EDGE_DEADZONE = 0.55;
+const EDGE_DEADZONE = 0.72;
+/** Sem mexer o mouse por esse tempo, o giro de borda para. */
+const EDGE_IDLE_TIMEOUT = 0.9;
 
 /**
  * Converte a posicao do ponteiro num eixo ([-1, 1]) na intensidade do giro.

@@ -26,6 +26,23 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
 
 ## Armadilhas conhecidas
 
+- **NUNCA mude a quantidade de luzes da cena durante o jogo.** No three, entrar
+  ou sair uma luz (inclusive `visible = false`, ou esconder o pai dela) invalida
+  os programas de shader de TODOS os materiais, e a recompilacao trava o frame
+  por centenas de milissegundos. Foi o que fazia o jogo engasgar a cada tiro e a
+  cada inimigo morto. Todas as luzes sao criadas na inicializacao e apagadas com
+  `intensity = 0`. Pelo mesmo motivo, materiais nascem com `transparent: true`
+  quando forem desaparecer depois: ligar isso em pleno jogo recompila.
+- **`Game.warmupShaders()` compila tudo na tela de carregamento.** Se voce
+  adicionar material, geometria ou tipo de inimigo novo, inclua no aquecimento —
+  senao o custo reaparece no meio da partida. Note que ele renderiza um frame de
+  verdade: `renderer.compile` sozinho nao cobre shaders de sombra nem o envio das
+  geometrias pra GPU. E os figurantes do aquecimento seguem vivos de proposito,
+  porque descartar o ultimo material que usa um programa descarta o programa.
+- Para medir esse tipo de engasgo, olhe `renderer.info.programs.length` e
+  `renderer.info.memory.geometries` antes e depois de uma acao: se sobem em
+  pleno jogo, tem trabalho caindo no frame errado.
+
 - **Materiais metálicos ficam pretos sem environment map.** A cena usa um
   `PMREMGenerator` + `RoomEnvironment` em `Game`. Se criar outra cena, dê um
   `environment` a ela.

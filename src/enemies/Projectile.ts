@@ -8,7 +8,6 @@ interface Projectile {
   damage: number;
   life: number;
   mesh: THREE.Mesh;
-  light: THREE.PointLight;
 }
 
 export interface ProjectileHit {
@@ -23,20 +22,19 @@ const _dir = new THREE.Vector3();
 
 /**
  * Projeteis inimigos: esferas lentas e visiveis, feitas pra serem desviadas.
- * Pool fixo — nada de alocar mesh no meio do tiroteio.
+ * Pool fixo — nada de alocar mesh no meio do tiroteio, e nenhuma luz dinamica
+ * (ver o comentario em Effects: mexer na contagem de luzes recompila shaders).
  */
 export class ProjectileSystem {
   readonly group = new THREE.Group();
   private pool: Projectile[] = [];
   private geo = new THREE.SphereGeometry(0.14, 10, 8);
-  private mat = new THREE.MeshBasicMaterial({ color: 0x8fe4ff });
+  private mat = new THREE.MeshBasicMaterial({ color: 0xbdf0ff });
 
   constructor() {
     for (let i = 0; i < MAX_PROJECTILES; i++) {
       const mesh = new THREE.Mesh(this.geo, this.mat);
       mesh.visible = false;
-      const light = new THREE.PointLight(0x62d0ff, 0, 6, 2);
-      mesh.add(light);
       this.group.add(mesh);
       this.pool.push({
         active: false,
@@ -45,7 +43,6 @@ export class ProjectileSystem {
         damage: 0,
         life: 0,
         mesh,
-        light,
       });
     }
   }
@@ -60,7 +57,6 @@ export class ProjectileSystem {
     p.life = 5;
     p.mesh.visible = true;
     p.mesh.position.copy(from);
-    p.light.intensity = 4;
   }
 
   /**
@@ -109,7 +105,6 @@ export class ProjectileSystem {
   private deactivate(p: Projectile): void {
     p.active = false;
     p.mesh.visible = false;
-    p.light.intensity = 0;
   }
 
   clear(): void {

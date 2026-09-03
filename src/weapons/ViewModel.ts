@@ -6,7 +6,6 @@ interface Rig {
   root: THREE.Group;
   muzzlePoint: THREE.Object3D;
   flash: THREE.Mesh;
-  flashLight: THREE.PointLight;
 }
 
 const HIP_POS = new THREE.Vector3(0.26, -0.2, -0.5);
@@ -39,8 +38,16 @@ export class ViewModel {
 
   private disposables: (THREE.BufferGeometry | THREE.Material)[] = [];
 
+  /**
+   * Uma unica luz de clarao para todas as armas. Uma por rig significaria a
+   * quantidade de luzes da cena mudando a cada troca de arma — e cada mudanca
+   * dessas recompila os shaders (o mesmo problema documentado em Effects).
+   */
+  private flashLight = new THREE.PointLight(0xffb457, 0, 9, 2);
+
   constructor() {
     this.group.renderOrder = 10;
+    this.group.add(this.flashLight);
     // A cena da arma tem FOV proprio; a escala compensa pra ela nao ficar
     // gigante em relacao ao mundo.
     this.group.scale.setScalar(0.78);
@@ -166,11 +173,15 @@ export class ViewModel {
     flash.visible = false;
     root.add(flash);
 
-    const flashLight = new THREE.PointLight(0xffb457, 0, 9, 2);
-    flashLight.position.copy(muzzlePoint.position);
-    root.add(flashLight);
+    return { root, muzzlePoint, flash };
+  }
 
-    return { root, muzzlePoint, flash, flashLight };
+  /** Todos os rigs visiveis de uma vez, so' para o aquecimento de shaders. */
+  setVisibleForWarmup(on: boolean): void {
+    for (const [id, rig] of this.rigs) {
+      rig.root.visible = on || id === this.current;
+      rig.flash.visible = on;
+    }
   }
 
   setWeapon(id: WeaponId): void {
@@ -259,9 +270,10 @@ export class ViewModel {
       (rig.flash.material as THREE.MeshBasicMaterial).opacity = t;
       rig.flash.rotation.z = Math.random() * Math.PI;
       rig.flash.scale.setScalar(lerp(0.75, 1.5, Math.random()));
-      rig.flashLight.intensity = t * 22;
+      this.flashLight.position.copy(rig.root.position).add(rig.muzzlePoint.position);
+      this.flashLight.intensity = t * 22;
     } else {
-      rig.flashLight.intensity = 0;
+      this.flashLight.intensity = 0;
     }
   }
 

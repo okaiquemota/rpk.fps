@@ -197,6 +197,8 @@ kbd {
 .settings label span { display: flex; justify-content: space-between; margin-bottom: 6px; }
 .settings label b { color: var(--accent); }
 .settings input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.settings label.toggle span { margin-bottom: 0; align-items: center; }
+.settings label.toggle input { accent-color: var(--accent); cursor: pointer; width: 16px; height: 16px; }
 
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 26px; }
 .stats > div { display: flex; flex-direction: column; gap: 5px; }

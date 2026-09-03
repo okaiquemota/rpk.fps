@@ -13,6 +13,46 @@ const AVOID_ANGLES = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4, 2.1, -2.1];
 const _dir = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 
+/**
+ * Geometrias reaproveitadas por tipo de inimigo. Sao identicas entre instancias
+ * do mesmo tipo, e criar (e descartar) cinco BoxGeometry a cada spawn e a cada
+ * morte e' desperdicio puro no meio de uma onda.
+ */
+interface EnemyGeometry {
+  body: THREE.BoxGeometry;
+  head: THREE.BoxGeometry;
+  eye: THREE.BoxGeometry;
+  leg: THREE.BoxGeometry;
+  arm: THREE.BoxGeometry;
+}
+const geometryCache = new Map<EnemyKind, EnemyGeometry>();
+
+function geometriesFor(kind: EnemyKind): EnemyGeometry {
+  const cached = geometryCache.get(kind);
+  if (cached) return cached;
+
+  const d = ENEMY_DEFS[kind];
+  const H = d.height;
+  const w = d.radius * 1.7;
+  const geo: EnemyGeometry = {
+    body: new THREE.BoxGeometry(w, H * 0.38, w * 0.7),
+    head: new THREE.BoxGeometry(w * 0.62, H * 0.17, w * 0.6),
+    eye: new THREE.BoxGeometry(w * 0.42, H * 0.17 * 0.28, 0.05),
+    leg: new THREE.BoxGeometry(w * 0.3, H * 0.42, w * 0.3),
+    arm: new THREE.BoxGeometry(w * 0.24, H * 0.38 * 0.85, w * 0.24),
+  };
+  geometryCache.set(kind, geo);
+  return geo;
+}
+
+/** Chamar so' ao derrubar o jogo inteiro. */
+export function disposeEnemyGeometries(): void {
+  for (const g of geometryCache.values()) {
+    g.body.dispose(); g.head.dispose(); g.eye.dispose(); g.leg.dispose(); g.arm.dispose();
+  }
+  geometryCache.clear();
+}
+
 export class Enemy {
   readonly def: EnemyDef;
   readonly group = new THREE.Group();
@@ -73,17 +113,24 @@ export class Enemy {
     const bodyY = H * 0.61;
     const headY = H * 0.885;
 
-    this.bodyMat = new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.75, metalness: 0.15 });
+    // `transparent: true` desde o nascimento, mesmo opaco: ligar isso so' na hora
+    // da morte mudaria os parametros do material e obrigaria o three a recompilar
+    // o shader bem no frame do abate — que era exatamente onde o jogo travava.
+    this.bodyMat = new THREE.MeshStandardMaterial({
+      color: d.color, roughness: 0.75, metalness: 0.15, transparent: true,
+    });
     this.headMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(d.color).multiplyScalar(1.25), roughness: 0.6, metalness: 0.2,
+      transparent: true,
     });
 
-    this.body = new THREE.Mesh(new THREE.BoxGeometry(w, bodyH, w * 0.7), this.bodyMat);
+    const geo = geometriesFor(d.kind);
+    this.body = new THREE.Mesh(geo.body, this.bodyMat);
     this.body.position.y = bodyY;
     this.body.castShadow = true;
     this.group.add(this.body);
 
-    this.head = new THREE.Mesh(new THREE.BoxGeometry(w * 0.62, headH, w * 0.6), this.headMat);
+    this.head = new THREE.Mesh(geo.head, this.headMat);
     this.head.position.y = headY;
     this.head.castShadow = true;
     this.group.add(this.head);
@@ -91,15 +138,15 @@ export class Enemy {
     // "olho" emissivo: da' pra saber pra onde ele esta' olhando de longe
     this.eyeMat = new THREE.MeshStandardMaterial({
       color: d.eyeColor, emissive: d.eyeColor, emissiveIntensity: 2.4, roughness: 0.3,
+      transparent: true,
     });
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(w * 0.42, headH * 0.28, 0.05), this.eyeMat);
+    const eye = new THREE.Mesh(geo.eye, this.eyeMat);
     eye.position.set(0, headY + headH * 0.08, -w * 0.31);
     this.group.add(eye);
 
     // pernas (animadas na caminhada)
-    const legGeo = new THREE.BoxGeometry(w * 0.3, legH, w * 0.3);
     for (const side of [-1, 1]) {
-      const leg = new THREE.Mesh(legGeo, this.bodyMat);
+      const leg = new THREE.Mesh(geo.leg, this.bodyMat);
       leg.position.set(side * w * 0.24, legH * 0.5, 0);
       leg.castShadow = true;
       this.group.add(leg);
@@ -107,9 +154,8 @@ export class Enemy {
     }
 
     // bracos
-    const armGeo = new THREE.BoxGeometry(w * 0.24, bodyH * 0.85, w * 0.24);
     for (const side of [-1, 1]) {
-      const arm = new THREE.Mesh(armGeo, this.headMat);
+      const arm = new THREE.Mesh(geo.arm, this.headMat);
       arm.position.set(side * w * 0.63, bodyY + bodyH * 0.05, 0);
       arm.castShadow = true;
       this.group.add(arm);
@@ -329,7 +375,6 @@ export class Enemy {
     this.group.position.y -= Math.max(0, this.deathTimer - 0.9) * 1.6;
 
     const fade = clamp(1 - Math.max(0, this.deathTimer - 1) / 0.7, 0, 1);
-    this.bodyMat.transparent = this.headMat.transparent = this.eyeMat.transparent = true;
     this.bodyMat.opacity = this.headMat.opacity = fade;
     this.eyeMat.opacity = fade;
     this.eyeMat.emissiveIntensity = fade * 2.4;
@@ -374,14 +419,10 @@ export class Enemy {
     );
   }
 
+  /** So' os materiais: a geometria e' compartilhada por todos do mesmo tipo. */
   dispose(): void {
-    this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        const m = o.material;
-        if (Array.isArray(m)) m.forEach((x) => x.dispose());
-        else m.dispose();
-      }
-    });
+    this.bodyMat.dispose();
+    this.headMat.dispose();
+    this.eyeMat.dispose();
   }
 }

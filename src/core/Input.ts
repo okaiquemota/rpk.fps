@@ -32,6 +32,15 @@ export class Input {
   pointerNY = 0;
   /** O ponteiro esta' sobre a janela? (fora dela nao ha' giro de borda) */
   pointerInside = false;
+  private lastPointerMove = -Infinity;
+
+  /** Segundos desde o ultimo movimento real do mouse. */
+  get secondsSincePointerMove(): number {
+    return (performance.now() - this.lastPointerMove) / 1000;
+  }
+
+  /** Marca o mouse como parado agora — usado ao (re)entrar na partida. */
+  resetPointerIdle(): void { this.lastPointerMove = -Infinity; }
   onLockChange: ((locked: boolean) => void) | null = null;
   onFallback: (() => void) | null = null;
 
@@ -76,6 +85,7 @@ export class Input {
     this.pointerNX = w > 0 ? (e.clientX / w) * 2 - 1 : 0;
     this.pointerNY = h > 0 ? (e.clientY / h) * 2 - 1 : 0;
     this.pointerInside = true;
+    this.lastPointerMove = performance.now();
 
     if (!this.active) return;
     this.mouseDX += e.movementX;

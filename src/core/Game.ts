@@ -11,8 +11,9 @@ import { ViewModel } from '../weapons/ViewModel';
 import { CombatSystem } from '../weapons/Combat';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from '../weapons/WeaponDefs';
 import { EnemyManager } from '../enemies/EnemyManager';
+import { Enemy, disposeEnemyGeometries } from '../enemies/Enemy';
+import { ENEMY_DEFS, type EnemyKind } from '../enemies/EnemyTypes';
 import { ProjectileSystem } from '../enemies/Projectile';
-import type { Enemy } from '../enemies/Enemy';
 import { Effects } from '../fx/Effects';
 import { HUD } from '../ui/HUD';
 import { Screens, type Settings } from '../ui/Screens';
@@ -29,6 +30,7 @@ const _ejectAt = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
 /** A que distancia do olho o clarao e o tracer nascem, em metros. */
 const MUZZLE_WORLD_DISTANCE = 0.85;
+const PICKUP_KINDS: PickupKind[] = ['health', 'armor', 'ammo', 'weapon-rifle', 'weapon-shotgun'];
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -37,6 +39,8 @@ export class Game {
   private viewScene = new THREE.Scene();
   private viewCamera: THREE.PerspectiveCamera;
   private envMap: THREE.Texture;
+  /** Ver warmupShaders(): mantidos vivos so' pra segurar o cache de shaders. */
+  private warmupKeepAlive: Enemy[] = [];
 
   private input: Input;
   private audio = new AudioManager();
@@ -166,6 +170,8 @@ export class Game {
       if (document.hidden && this.state === 'playing') this.pause();
     });
 
+    this.warmupShaders();
+
     this.screens.hideLoading();
     this.screens.showStart();
     this.lastTime = performance.now();
@@ -176,8 +182,59 @@ export class Game {
   // ciclo de vida
   // ==================================================================
 
+  /**
+   * Compila de uma vez todos os shaders que a partida vai precisar.
+   *
+   * O three compila o programa de um material na primeira vez que ele aparece na
+   * tela, e isso trava o frame. Sem este passo, o engasgo caia no primeiro
+   * inimigo, no primeiro tiro e no primeiro item — no meio do jogo. Aqui ele cai
+   * na tela inicial, onde ninguem se importa.
+   */
+  private warmupShaders(): void {
+    // Os figurantes precisam ficar DENTRO do campo de visao (e do volume de
+    // sombra): fora dele nao entram no render e nada e' preparado por eles.
+    // A tela de carregamento cobre isso tudo — ninguem ve' os bonecos.
+    const start = this.level.playerStart;
+    const dummies: Enemy[] = [];
+    const kinds = Object.keys(ENEMY_DEFS) as EnemyKind[];
+    kinds.forEach((kind, i) => {
+      const spot = new THREE.Vector3(start.x - 3 + i * 2, 0, start.z - 7);
+      const e = new Enemy(kind, spot, 1, 1);
+      e.group.position.copy(spot);
+      this.scene.add(e.group);
+      dummies.push(e);
+    });
+    PICKUP_KINDS.forEach((kind, i) => {
+      this.pickups.spawn(kind, new THREE.Vector3(start.x - 2 + i, 0, start.z - 4));
+    });
+
+    this.effects.setVisibleForWarmup(true);
+    this.viewModel.setVisibleForWarmup(true);
+
+    // `compile` resolve os programas dos materiais, mas nao os shaders de sombra
+    // nem o envio das geometrias pra GPU. Um frame de verdade resolve os tres.
+    this.renderer.compile(this.scene, this.player.camera);
+    this.renderer.compile(this.viewScene, this.viewCamera);
+    this.renderer.clear();
+    this.renderer.render(this.scene, this.player.camera);
+    this.renderer.clearDepth();
+    this.renderer.render(this.viewScene, this.viewCamera);
+
+    this.effects.setVisibleForWarmup(false);
+    this.viewModel.setVisibleForWarmup(false);
+    this.pickups.clear();
+    for (const e of dummies) this.scene.remove(e.group);
+
+    // Os figurantes saem da cena mas os materiais NAO sao descartados: o three
+    // libera o programa compilado junto com o ultimo material que o usa, e ai' o
+    // primeiro inimigo de verdade pagaria a compilacao de novo. Quatro materiais
+    // vivos custam nada perto disso.
+    this.warmupKeepAlive = dummies;
+  }
+
   private applySettings(s: Settings): void {
     this.player.sensitivity = s.sensitivity;
+    this.player.edgeTurnEnabled = s.edgeTurn;
     this.player.baseFov = s.fov;
     this.player.camera.fov = s.fov;
     this.player.camera.updateProjectionMatrix();
@@ -208,6 +265,7 @@ export class Game {
     document.body.classList.add('playing');
     this.screens.hideAll();
     this.hud.show();
+    this.input.resetPointerIdle();
     this.input.requestLock();
     this.hud.showToast('SOBREVIVA', 'A primeira onda chega em instantes');
   }
@@ -227,6 +285,7 @@ export class Game {
     document.body.classList.add('playing');
     this.screens.hideAll();
     this.audio.resume();
+    this.input.resetPointerIdle();
     this.input.requestLock();
   }
 
@@ -310,7 +369,6 @@ export class Game {
     this.score += Math.round(enemy.def.score * this.combo * 0.5);
 
     this.audio.enemyDeath();
-    this.effects.deathBurst(enemy.center(), enemy.def.color);
 
     if (Math.random() < enemy.def.dropChance) {
       const roll = Math.random();
@@ -595,6 +653,8 @@ export class Game {
     this.projectiles.dispose();
     this.pickups.dispose();
     this.viewModel.dispose();
+    for (const e of this.warmupKeepAlive) e.dispose();
+    disposeEnemyGeometries();
     this.envMap.dispose();
     this.renderer.dispose();
   }

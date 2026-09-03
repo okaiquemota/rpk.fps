@@ -6,7 +6,6 @@ export type PickupKind = 'health' | 'armor' | 'ammo' | 'weapon-rifle' | 'weapon-
 interface Pickup {
   kind: PickupKind;
   mesh: THREE.Mesh;
-  light: THREE.PointLight;
   position: THREE.Vector3;
   life: number;
   bobOffset: number;
@@ -22,7 +21,13 @@ const CONFIG: Record<PickupKind, { color: number; size: [number, number, number]
 
 const PICKUP_RADIUS = 1.15;
 
-/** Itens no chao: giram, flutuam e somem sozinhos. */
+/**
+ * Itens no chao: giram, flutuam e somem sozinhos.
+ *
+ * Cada item ja' teve uma PointLight propria, e era um dos motivos do jogo travar
+ * ao matar inimigo: entrar e sair uma luz da cena refaz os shaders de todos os
+ * materiais. O brilho agora vem do material emissivo, que nao custa nada disso.
+ */
 export class PickupManager {
   readonly group = new THREE.Group();
   private items: Pickup[] = [];
@@ -40,7 +45,7 @@ export class PickupManager {
     let mat = this.matCache.get(kind);
     if (!mat) {
       mat = new THREE.MeshStandardMaterial({
-        color: cfg.color, emissive: cfg.color, emissiveIntensity: 0.7,
+        color: cfg.color, emissive: cfg.color, emissiveIntensity: 1.6,
         roughness: 0.4, metalness: 0.3,
       });
       this.matCache.set(kind, mat);
@@ -51,12 +56,10 @@ export class PickupManager {
     mesh.position.copy(position);
     mesh.position.y += 0.6;
 
-    const light = new THREE.PointLight(cfg.color, 5, 4.5, 2);
-    mesh.add(light);
     this.group.add(mesh);
 
     this.items.push({
-      kind, mesh, light,
+      kind, mesh,
       position: position.clone(),
       life: cfg.life > 0 ? cfg.life : Infinity,
       bobOffset: randRange(0, Math.PI * 2),
@@ -76,11 +79,7 @@ export class PickupManager {
       item.mesh.position.y = item.position.y + 0.6 + Math.sin(t * 2.2 + item.bobOffset) * 0.12;
 
       // pisca antes de sumir
-      if (item.life < 5) {
-        const blink = Math.sin(item.life * 14) > 0;
-        item.mesh.visible = blink;
-        item.light.intensity = blink ? 5 : 0;
-      }
+      if (item.life < 5) item.mesh.visible = Math.sin(item.life * 14) > 0;
 
       if (item.life <= 0) { this.remove(i); continue; }
 
@@ -99,7 +98,6 @@ export class PickupManager {
   private remove(index: number): void {
     const item = this.items[index]!;
     this.group.remove(item.mesh);
-    item.mesh.remove(item.light);
     this.items.splice(index, 1);
   }
 

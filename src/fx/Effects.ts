@@ -193,7 +193,7 @@ interface FlashLight {
 
 const MAX_TRACERS = 32;
 const MAX_SHELLS = 28;
-const MAX_FLASHES = 8;
+const MAX_FLASHES = 4;
 const TRACER_LENGTH = 4.5;
 
 function decalTexture(): THREE.Texture {
@@ -291,9 +291,15 @@ export class Effects {
     }
 
     // --- luzes de clarao (tiro e impacto) ---
+    //
+    // ATENCAO: estas luzes NUNCA sao escondidas nem removidas. No three, mudar a
+    // QUANTIDADE de luzes da cena invalida os programas de shader de todos os
+    // materiais, e a recompilacao trava o jogo por centenas de milissegundos —
+    // era isso que engasgava a cada tiro e a cada inimigo morto. Uma luz apagada
+    // aqui e' uma luz com intensity 0, que custa alguns ciclos por fragmento e
+    // nao custa nenhuma recompilacao.
     for (let i = 0; i < MAX_FLASHES; i++) {
       const light = new THREE.PointLight(0xffb457, 0, 14, 2);
-      light.visible = false;
       this.group.add(light);
       this.flashes.push({ light, life: 0, maxLife: 1, power: 0 });
     }
@@ -331,7 +337,6 @@ export class Effects {
     if (!f) return;
     f.light.position.copy(pos);
     f.light.color.setHex(color);
-    f.light.visible = true;
     f.life = f.maxLife = duration;
     f.power = power;
   }
@@ -455,19 +460,6 @@ export class Effects {
     }
   }
 
-  /** Nuvem quando um inimigo morre. */
-  deathBurst(point: THREE.Vector3, color: number): void {
-    const c = new THREE.Color(color);
-    for (let i = 0; i < 26; i++) {
-      _vel.set(randRange(-1, 1), randRange(0.2, 1.4), randRange(-1, 1)).multiplyScalar(randRange(1.5, 5));
-      this.sparks.emit(point, _vel, c, randRange(0.5, 1.1), randRange(2, 4.5), 5);
-    }
-    for (let i = 0; i < 8; i++) {
-      _vel.set(randRange(-0.8, 0.8), randRange(0.3, 1.2), randRange(-0.8, 0.8)).multiplyScalar(randRange(0.8, 2.4));
-      this.smoke.emit(point, _vel, Effects.SMOKE, randRange(0.7, 1.4), randRange(1.4, 2.8), -0.4, 1.6, 2.5, 0.45);
-    }
-  }
-
   private addDecal(point: THREE.Vector3, normal: THREE.Vector3): void {
     const m = this.decals[this.decalIndex]!;
     this.decalIndex = (this.decalIndex + 1) % this.decals.length;
@@ -488,6 +480,17 @@ export class Effects {
     t.progress = 0;
     t.life = from.distanceTo(to) / FX.tracerSpeed + 0.03;
     this.tracerMeshes[idx]!.visible = true;
+  }
+
+  /**
+   * Deixa tudo visivel por um instante para o `renderer.compile` alcancar todos
+   * os materiais. Compilar shader e' caro; melhor pagar na tela inicial do que
+   * no primeiro tiro.
+   */
+  setVisibleForWarmup(on: boolean): void {
+    for (const m of this.tracerMeshes) m.visible = on;
+    for (const s of this.shells) s.mesh.visible = on;
+    for (const d of this.decals) d.visible = on;
   }
 
   addShake(amount: number): void {
@@ -557,7 +560,6 @@ export class Effects {
       if (f.life <= 0) continue;
       f.life -= dt;
       if (f.life <= 0) {
-        f.light.visible = false;
         f.light.intensity = 0;
         continue;
       }
@@ -591,7 +593,7 @@ export class Effects {
       this.tracerMeshes[k]!.visible = false;
     }
     for (const s of this.shells) { s.life = 0; s.mesh.visible = false; }
-    for (const f of this.flashes) { f.life = 0; f.light.visible = false; f.light.intensity = 0; }
+    for (const f of this.flashes) { f.life = 0; f.light.intensity = 0; }
     for (const d of this.decals) d.visible = false;
     this.shakeTrauma = 0;
     this.shakeOffset.set(0, 0, 0);
