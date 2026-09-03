@@ -132,6 +132,14 @@ export class Game {
     // ---------- entrada e UI ----------
     this.input = new Input(canvas);
     this.input.onLockChange = (locked) => this.onPointerLockChange(locked);
+    this.input.onFallback = () => {
+      this.hud.showToast('MOUSE SOLTO', 'Aqui nao da pra capturar o cursor — mire com o mouse sobre a tela ou com as setas');
+    };
+
+    // Clicar no jogo tenta recapturar o mouse (perde-se ao trocar de aba).
+    canvas.addEventListener('mousedown', () => {
+      if (this.state === 'playing' && !this.input.active) this.input.requestLock();
+    });
 
     this.screens.onPlay = () => this.startRun();
     this.screens.onResume = () => this.resume();
@@ -183,6 +191,7 @@ export class Game {
 
     this.viewModel.setWeapon('pistol');
     this.state = 'playing';
+    document.body.classList.add('playing');
     this.screens.hideAll();
     this.hud.show();
     this.input.requestLock();
@@ -192,6 +201,7 @@ export class Game {
   private pause(): void {
     if (this.state !== 'playing') return;
     this.state = 'paused';
+    document.body.classList.remove('playing');
     this.input.releaseLock();
     this.audio.suspend();
     this.screens.showPause();
@@ -200,6 +210,7 @@ export class Game {
   private resume(): void {
     if (this.state !== 'paused') return;
     this.state = 'playing';
+    document.body.classList.add('playing');
     this.screens.hideAll();
     this.audio.resume();
     this.input.requestLock();
@@ -207,11 +218,13 @@ export class Game {
 
   private onPointerLockChange(locked: boolean): void {
     // Perder o lock durante o jogo = pausa. Sair pelo menu ja' esta' tratado.
-    if (!locked && this.state === 'playing') this.pause();
+    // No modo fallback nunca houve lock pra perder.
+    if (!locked && this.state === 'playing' && !this.input.fallback) this.pause();
   }
 
   private onPlayerDeath(): void {
     this.state = 'dead';
+    document.body.classList.remove('playing');
     this.deathTimer = 0;
     this.audio.playerDeath();
     this.effects.addShake(0.8);

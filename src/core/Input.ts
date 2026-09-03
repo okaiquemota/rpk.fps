@@ -1,6 +1,11 @@
 /**
  * Teclado + mouse + pointer lock.
  * O jogo so' le' estado daqui; nada de listeners espalhados pelo codigo.
+ *
+ * Nem todo contexto deixa capturar o mouse — um iframe sem `allow="pointer-lock"`
+ * recusa o pedido. Quando isso acontece entramos no modo `fallback`: o mouse
+ * continua girando a camera enquanto o ponteiro estiver sobre a pagina, e as
+ * setas do teclado viram uma alternativa completa de mira.
  */
 export class Input {
   private keys = new Set<string>();
@@ -15,7 +20,13 @@ export class Input {
   private buttonsPressed = new Set<number>();
 
   locked = false;
+  /** Sem pointer lock disponivel: mira pelo movimento do mouse solto + setas. */
+  fallback = false;
   onLockChange: ((locked: boolean) => void) | null = null;
+  onFallback: (() => void) | null = null;
+
+  /** O jogo aceita entrada de mouse? */
+  get active(): boolean { return this.locked || this.fallback; }
 
   constructor(private canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', this.onKeyDown);
@@ -26,6 +37,7 @@ export class Input {
     window.addEventListener('wheel', this.onWheel, { passive: true });
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    document.addEventListener('pointerlockerror', this.onPointerLockError);
     // Sem menu de contexto: botao direito e' mirar.
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
@@ -46,13 +58,13 @@ export class Input {
   };
 
   private onMouseMove = (e: MouseEvent): void => {
-    if (!this.locked) return;
+    if (!this.active) return;
     this.mouseDX += e.movementX;
     this.mouseDY += e.movementY;
   };
 
   private onMouseDown = (e: MouseEvent): void => {
-    if (!this.locked) return;
+    if (!this.active) return;
     this.buttons.add(e.button);
     this.buttonsPressed.add(e.button);
   };
@@ -62,7 +74,7 @@ export class Input {
   };
 
   private onWheel = (e: WheelEvent): void => {
-    if (!this.locked) return;
+    if (!this.active) return;
     this.wheelDelta += e.deltaY;
   };
 
@@ -77,8 +89,37 @@ export class Input {
     this.onLockChange?.(this.locked);
   };
 
+  private onPointerLockError = (): void => {
+    this.enterFallback();
+  };
+
+  private enterFallback(): void {
+    if (this.fallback) return;
+    this.fallback = true;
+    this.onFallback?.();
+  }
+
   requestLock(): void {
-    if (!this.locked) void this.canvas.requestPointerLock();
+    if (this.locked) return;
+    if (this.fallback) return;
+
+    // requestPointerLock devolve Promise nos navegadores atuais e undefined nos
+    // antigos; os dois caminhos precisam cair no fallback quando falham.
+    let result: unknown;
+    try {
+      result = this.canvas.requestPointerLock();
+    } catch {
+      this.enterFallback();
+      return;
+    }
+    if (result instanceof Promise) {
+      result.catch(() => this.enterFallback());
+    } else {
+      // Sem Promise nao ha' erro pra capturar: damos um tempo e checamos.
+      window.setTimeout(() => {
+        if (!this.locked) this.enterFallback();
+      }, 400);
+    }
   }
 
   releaseLock(): void {
@@ -109,5 +150,6 @@ export class Input {
     window.removeEventListener('wheel', this.onWheel);
     window.removeEventListener('blur', this.onBlur);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+    document.removeEventListener('pointerlockerror', this.onPointerLockError);
   }
 }

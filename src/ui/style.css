@@ -20,6 +20,9 @@ html, body {
 
 #viewport { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
+/* Durante a partida o cursor some, tenha ou nao pointer lock. */
+body.playing { cursor: none; }
+
 .hidden { display: none !important; }
 
 /* ============ HUD ============ */

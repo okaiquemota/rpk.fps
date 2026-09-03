@@ -29,12 +29,6 @@ if (!supportsWebGL()) {
   // o estado do jogo (`__RPK.player`, `__RPK.enemies`, ...).
   (window as unknown as { __RPK: Game }).__RPK = game;
 
-  // Clicar em qualquer lugar recaptura o mouse quando o jogo esta' rodando.
-  window.addEventListener('mousedown', () => {
-    const menuOpen = document.querySelectorAll('.screen:not(.hidden)').length > 0;
-    if (!menuOpen && !document.pointerLockElement) canvas.requestPointerLock();
-  });
-
   if (import.meta.hot) {
     import.meta.hot.dispose(() => game.dispose());
   }

@@ -107,6 +107,14 @@ export class Player {
     const scale = 0.0022 * this.sensitivity * (1 - this.adsAmount * 0.35);
     this.yaw -= input.mouseDX * scale;
     this.pitch -= input.mouseDY * scale;
+
+    // Setas viram mira completa quando o mouse nao pode ser capturado.
+    const arrow = 2.1 * this.sensitivity * (1 - this.adsAmount * 0.35) * dt;
+    if (input.isDown('ArrowLeft')) this.yaw += arrow;
+    if (input.isDown('ArrowRight')) this.yaw -= arrow;
+    if (input.isDown('ArrowUp')) this.pitch += arrow;
+    if (input.isDown('ArrowDown')) this.pitch -= arrow;
+
     this.pitch = clamp(this.pitch, -CAMERA.pitchLimit, CAMERA.pitchLimit);
 
     // O recuo sobe rapido e desce devagar — a arma "puxa" e depois assenta.
