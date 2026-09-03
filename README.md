@@ -34,7 +34,13 @@ npm run typecheck  # só o tsc, sem gerar nada
 | Botão direito | Mirar (ADS) |
 | `R` | Recarregar |
 | `1` `2` `3` / scroll | Trocar de arma |
+| Setas | Olhar (alternativa ao mouse) |
 | `Esc` | Pausar |
+
+Onde o navegador não permitir capturar o cursor (dentro de um iframe, por
+exemplo), o jogo avisa e entra em modo de mira solta: o mouse continua girando
+a câmera, e levá-lo até a borda da tela mantém o giro — é assim que você dá a
+volta completa sem o cursor esbarrar na moldura da janela.
 
 ## Como o jogo funciona
 
@@ -98,6 +104,8 @@ Algumas decisões que valem ser explicadas:
   cima do mundo com o depth buffer limpo. Sem isso ela atravessa parede.
 - **Pools pré-alocados em tudo que é efeito.** Um tiro de escopeta gera 9
   impactos no mesmo frame; alocar nesse momento é engasgo de GC na hora errada.
+- **Faísca e fumaça são duas camadas de partículas separadas**, porque querem
+  blending diferente: faísca soma luz, fumaça cobre o que está atrás.
 
 Durante o jogo, `window.__RPK` expõe a instância do `Game` — dá pra bisbilhotar
 `__RPK.player`, `__RPK.enemies.enemies`, etc. no console do navegador.

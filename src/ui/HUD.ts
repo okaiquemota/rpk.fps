@@ -34,6 +34,10 @@ export class HUD {
   private toast = $('center-toast');
   private killfeed = $('killfeed');
   private wheel = $('weapon-wheel');
+  private edgeL = document.querySelector<HTMLElement>('.e-l')!;
+  private edgeR = document.querySelector<HTMLElement>('.e-r')!;
+  private edgeT = document.querySelector<HTMLElement>('.e-t')!;
+  private edgeB = document.querySelector<HTMLElement>('.e-b')!;
 
   private slots = new Map<WeaponId, HTMLElement>();
   private last = {
@@ -149,6 +153,14 @@ export class HUD {
     void this.hitmarker.offsetWidth; // reinicia a animacao CSS
     this.hitmarker.classList.add(kill || headshot ? 'kill' : 'hit');
     this.hitmarkerTimer = 0.3;
+  }
+
+  /** Acende a borda para a qual a camera esta' girando sozinha. */
+  setEdgeTurn(x: number, y: number): void {
+    this.edgeL.style.opacity = x < 0 ? String(-x) : '0';
+    this.edgeR.style.opacity = x > 0 ? String(x) : '0';
+    this.edgeT.style.opacity = y < 0 ? String(-y) : '0';
+    this.edgeB.style.opacity = y > 0 ? String(y) : '0';
   }
 
   flashDamage(): void {

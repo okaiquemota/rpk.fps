@@ -7,7 +7,166 @@ interface Particle {
   maxLife: number;
   velocity: THREE.Vector3;
   gravity: number;
+  drag: number;
   size: number;
+  grow: number;
+  alpha: number;
+}
+
+/**
+ * Um lote de particulas com um unico draw call.
+ *
+ * Existem duas instancias no jogo porque faisca e fumaca querem blending
+ * diferente: faisca soma luz (aditivo), fumaca cobre o que esta' atras
+ * (normal). Misturar os dois num material so' deixa a fumaca parecendo vapor
+ * brilhante.
+ */
+class ParticleLayer {
+  readonly points: THREE.Points;
+  private particles: Particle[] = [];
+  private positions: Float32Array;
+  private colors: Float32Array;
+  private sizes: Float32Array;
+  private alphas: Float32Array;
+  private count = 0;
+
+  constructor(private max: number, blending: THREE.Blending, softness: number) {
+    const geo = new THREE.BufferGeometry();
+    this.positions = new Float32Array(max * 3);
+    this.colors = new Float32Array(max * 3);
+    this.sizes = new Float32Array(max);
+    this.alphas = new Float32Array(max);
+    geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+    geo.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
+    geo.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1));
+    geo.setDrawRange(0, 0);
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uSoftness: { value: softness } },
+      vertexShader: `
+        attribute float size;
+        attribute float alpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vColor = color;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          float dist = -mv.z;
+
+          // Sem teto, uma particula perto da camera vira um borrao do tamanho da
+          // tela: a formula de perspectiva explode quando dist tende a zero.
+          gl_PointSize = min(size * (260.0 / max(dist, 0.05)), 110.0);
+
+          // E some de vez quando esta' quase no olho, senao a fumaca do proprio
+          // cano tapa a mira.
+          vAlpha = alpha * smoothstep(0.35, 1.3, dist);
+
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform float uSoftness;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          float d = length(gl_PointCoord - vec2(0.5));
+          float a = smoothstep(0.5, uSoftness, d) * vAlpha;
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(vColor, a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+      transparent: true,
+      depthWrite: false,
+      blending,
+      vertexColors: true,
+    });
+
+    this.points = new THREE.Points(geo, mat);
+    this.points.frustumCulled = false;
+
+    for (let i = 0; i < max; i++) {
+      this.particles.push({
+        life: 0, maxLife: 1, velocity: new THREE.Vector3(),
+        gravity: 0, drag: 2.2, size: 1, grow: 0, alpha: 1,
+      });
+    }
+  }
+
+  emit(
+    pos: THREE.Vector3, vel: THREE.Vector3, color: THREE.Color,
+    life: number, size: number, gravity: number, drag = 2.2, grow = 0, alpha = 1,
+  ): void {
+    if (this.count >= this.max) return;
+    const i = this.count++;
+    const p = this.particles[i]!;
+    p.life = p.maxLife = life;
+    p.velocity.copy(vel);
+    p.gravity = gravity;
+    p.drag = drag;
+    p.size = size;
+    p.grow = grow;
+    p.alpha = alpha;
+    this.positions[i * 3] = pos.x;
+    this.positions[i * 3 + 1] = pos.y;
+    this.positions[i * 3 + 2] = pos.z;
+    this.colors[i * 3] = color.r;
+    this.colors[i * 3 + 1] = color.g;
+    this.colors[i * 3 + 2] = color.b;
+    this.sizes[i] = size;
+    this.alphas[i] = alpha;
+  }
+
+  update(dt: number): void {
+    let i = 0;
+    while (i < this.count) {
+      const p = this.particles[i]!;
+      p.life -= dt;
+      if (p.life <= 0) {
+        // Swap-remove: troca com a ultima viva e encolhe a contagem.
+        const last = this.count - 1;
+        if (i !== last) {
+          this.particles[i] = this.particles[last]!;
+          this.particles[last] = p;
+          for (let k = 0; k < 3; k++) {
+            this.positions[i * 3 + k] = this.positions[last * 3 + k]!;
+            this.colors[i * 3 + k] = this.colors[last * 3 + k]!;
+          }
+          this.sizes[i] = this.sizes[last]!;
+          this.alphas[i] = this.alphas[last]!;
+        }
+        this.count--;
+        continue;
+      }
+      p.velocity.y -= p.gravity * dt;
+      p.velocity.multiplyScalar(Math.max(0, 1 - p.drag * dt));
+      this.positions[i * 3] += p.velocity.x * dt;
+      this.positions[i * 3 + 1] += p.velocity.y * dt;
+      this.positions[i * 3 + 2] += p.velocity.z * dt;
+
+      const t = p.life / p.maxLife;
+      this.sizes[i] = p.size * (1 + p.grow * (1 - t));
+      this.alphas[i] = t * p.alpha;
+      i++;
+    }
+
+    const geo = this.points.geometry;
+    geo.setDrawRange(0, this.count);
+    geo.attributes.position!.needsUpdate = true;
+    geo.attributes.color!.needsUpdate = true;
+    geo.attributes.size!.needsUpdate = true;
+    geo.attributes.alpha!.needsUpdate = true;
+  }
+
+  clear(): void {
+    this.count = 0;
+    this.points.geometry.setDrawRange(0, 0);
+  }
+
+  dispose(): void {
+    this.points.geometry.dispose();
+    (this.points.material as THREE.Material).dispose();
+  }
 }
 
 interface Tracer {
@@ -15,11 +174,27 @@ interface Tracer {
   from: THREE.Vector3;
   to: THREE.Vector3;
   progress: number;
-  speed: number;
+}
+
+interface Shell {
+  life: number;
+  velocity: THREE.Vector3;
+  spin: THREE.Vector3;
+  bounces: number;
+  mesh: THREE.Mesh;
+}
+
+interface FlashLight {
+  light: THREE.PointLight;
+  life: number;
+  maxLife: number;
+  power: number;
 }
 
 const MAX_TRACERS = 32;
-const TRACER_LENGTH = 3.5;
+const MAX_SHELLS = 28;
+const MAX_FLASHES = 8;
+const TRACER_LENGTH = 4.5;
 
 function decalTexture(): THREE.Texture {
   const c = document.createElement('canvas');
@@ -45,181 +220,251 @@ function decalTexture(): THREE.Texture {
   return tex;
 }
 
+const _reflect = new THREE.Vector3();
+const _vel = new THREE.Vector3();
+const _pos = new THREE.Vector3();
+
 /**
- * Feedback visual do combate. Tudo em pools pre-alocados: durante um tiroteio
- * com escopeta saem 9 impactos no mesmo frame, e alocar nesse momento e' garantia
+ * Feedback visual do combate. Tudo em pools pre-alocados: durante um tiro de
+ * escopeta saem 9 impactos no mesmo frame, e alocar nesse momento e' garantia
  * de engasgo no GC.
  */
 export class Effects {
   readonly group = new THREE.Group();
 
-  // --- particulas ---
-  private particles: Particle[] = [];
-  private points: THREE.Points;
-  private pPositions: Float32Array;
-  private pColors: Float32Array;
-  private pSizes: Float32Array;
-  private pCount = 0;
+  private sparks = new ParticleLayer(FX.maxParticles, THREE.AdditiveBlending, 0.1);
+  private smoke = new ParticleLayer(FX.maxSmoke, THREE.NormalBlending, 0.0);
 
-  // --- tracers ---
   private tracers: Tracer[] = [];
   private tracerMeshes: THREE.Mesh[] = [];
 
-  // --- decals ---
+  private shells: Shell[] = [];
+  private flashes: FlashLight[] = [];
+
   private decals: THREE.Mesh[] = [];
   private decalIndex = 0;
-  private decalTex: THREE.Texture;
 
-  // --- screen shake ---
   private shakeTrauma = 0;
   readonly shakeOffset = new THREE.Vector3();
 
+  /** Tocado quando uma capsula ejetada bate no chao. */
+  onShellLand: (() => void) | null = null;
+
   private disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = [];
 
-  constructor() {
-    // Particulas: um unico Points com buffers dinamicos.
-    const geo = new THREE.BufferGeometry();
-    this.pPositions = new Float32Array(FX.maxParticles * 3);
-    this.pColors = new Float32Array(FX.maxParticles * 3);
-    this.pSizes = new Float32Array(FX.maxParticles);
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pPositions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(this.pColors, 3));
-    geo.setAttribute('size', new THREE.BufferAttribute(this.pSizes, 1));
-    geo.setDrawRange(0, 0);
+  /** Recebe a altura do chao pra capsula parar em cima da geometria certa. */
+  constructor(private groundHeightAt: (x: number, z: number, fromY: number) => number) {
+    this.group.add(this.sparks.points);
+    this.group.add(this.smoke.points);
 
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {},
-      vertexShader: `
-        attribute float size;
-        varying vec3 vColor;
-        void main() {
-          vColor = color;
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * (260.0 / -mv.z);
-          gl_Position = projectionMatrix * mv;
-        }`,
-      fragmentShader: `
-        varying vec3 vColor;
-        void main() {
-          vec2 d = gl_PointCoord - vec2(0.5);
-          float a = smoothstep(0.5, 0.15, length(d));
-          if (a < 0.02) discard;
-          gl_FragColor = vec4(vColor, a);
-        }`,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      vertexColors: true,
-    });
-
-    this.points = new THREE.Points(geo, mat);
-    this.points.frustumCulled = false;
-    this.group.add(this.points);
-    this.disposables.push(geo, mat);
-
-    for (let i = 0; i < FX.maxParticles; i++) {
-      this.particles.push({ life: 0, maxLife: 1, velocity: new THREE.Vector3(), gravity: 0, size: 1 });
-    }
-
-    // Tracers: caixinhas esticadas, mais baratas e mais grossas que THREE.Line.
-    const tracerGeo = new THREE.BoxGeometry(0.035, 0.035, 1);
-    const tracerMat = new THREE.MeshBasicMaterial({
-      color: 0xffdb8a, transparent: true, opacity: 0.85,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    });
-    this.disposables.push(tracerGeo, tracerMat);
+    // --- tracers: caixinhas esticadas, mais baratas e grossas que THREE.Line ---
+    const tracerGeo = new THREE.BoxGeometry(0.022, 0.022, 1);
+    this.disposables.push(tracerGeo);
     for (let i = 0; i < MAX_TRACERS; i++) {
-      const m = new THREE.Mesh(tracerGeo, tracerMat.clone());
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffd9a0, transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const m = new THREE.Mesh(tracerGeo, mat);
       m.visible = false;
       m.frustumCulled = false;
       this.group.add(m);
       this.tracerMeshes.push(m);
-      this.tracers.push({ life: 0, from: new THREE.Vector3(), to: new THREE.Vector3(), progress: 0, speed: 1 });
+      this.disposables.push(mat);
+      this.tracers.push({ life: 0, from: new THREE.Vector3(), to: new THREE.Vector3(), progress: 0 });
     }
 
-    // Decals: buracos de bala reciclados em anel.
-    this.decalTex = decalTexture();
-    this.disposables.push(this.decalTex);
-    const decalGeo = new THREE.PlaneGeometry(0.26, 0.26);
+    // --- capsulas ejetadas ---
+    const shellGeo = new THREE.CylinderGeometry(0.011, 0.012, 0.034, 6);
+    const shellMat = new THREE.MeshStandardMaterial({
+      color: 0xc9a227, metalness: 0.95, roughness: 0.3,
+    });
+    this.disposables.push(shellGeo, shellMat);
+    for (let i = 0; i < MAX_SHELLS; i++) {
+      const mesh = new THREE.Mesh(shellGeo, shellMat);
+      mesh.visible = false;
+      mesh.castShadow = true;
+      this.group.add(mesh);
+      this.shells.push({
+        life: 0, velocity: new THREE.Vector3(), spin: new THREE.Vector3(), bounces: 0, mesh,
+      });
+    }
+
+    // --- luzes de clarao (tiro e impacto) ---
+    for (let i = 0; i < MAX_FLASHES; i++) {
+      const light = new THREE.PointLight(0xffb457, 0, 14, 2);
+      light.visible = false;
+      this.group.add(light);
+      this.flashes.push({ light, life: 0, maxLife: 1, power: 0 });
+    }
+
+    // --- decals: buracos de bala reciclados em anel ---
+    const decalTex = decalTexture();
+    this.disposables.push(decalTex);
+    const decalGeo = new THREE.PlaneGeometry(0.17, 0.17);
     this.disposables.push(decalGeo);
     for (let i = 0; i < FX.maxDecals; i++) {
-      const mat2 = new THREE.MeshBasicMaterial({
-        map: this.decalTex, transparent: true, opacity: 0,
+      const mat = new THREE.MeshBasicMaterial({
+        map: decalTex, transparent: true, opacity: 0,
         depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4,
       });
-      const m = new THREE.Mesh(decalGeo, mat2);
+      const m = new THREE.Mesh(decalGeo, mat);
       m.visible = false;
       this.group.add(m);
       this.decals.push(m);
-      this.disposables.push(mat2);
+      this.disposables.push(mat);
     }
-  }
-
-  // ------------------------------------------------------------------
-
-  private emitParticle(
-    pos: THREE.Vector3, vel: THREE.Vector3, color: THREE.Color,
-    life: number, size: number, gravity: number,
-  ): void {
-    if (this.pCount >= FX.maxParticles) return;
-    const i = this.pCount++;
-    const p = this.particles[i]!;
-    p.life = p.maxLife = life;
-    p.velocity.copy(vel);
-    p.gravity = gravity;
-    p.size = size;
-    this.pPositions[i * 3] = pos.x;
-    this.pPositions[i * 3 + 1] = pos.y;
-    this.pPositions[i * 3 + 2] = pos.z;
-    this.pColors[i * 3] = color.r;
-    this.pColors[i * 3 + 1] = color.g;
-    this.pColors[i * 3 + 2] = color.b;
-    this.pSizes[i] = size;
   }
 
   private static readonly SPARK = new THREE.Color(0xffc46b);
-  private static readonly BLOOD = new THREE.Color(0xd83a2a);
-  private static readonly DUST = new THREE.Color(0x9a9186);
+  private static readonly SPARK_HOT = new THREE.Color(0xfff2c8);
+  private static readonly BLOOD = new THREE.Color(0x9e1f14);
+  private static readonly DUST = new THREE.Color(0x8b8378);
+  private static readonly SMOKE = new THREE.Color(0x4a4742);
 
-  /** Faisca + poeira + buraco de bala numa superficie solida. */
-  impact(point: THREE.Vector3, normal: THREE.Vector3): void {
-    for (let i = 0; i < 7; i++) {
-      const v = new THREE.Vector3(
-        normal.x + randRange(-0.7, 0.7),
-        normal.y + randRange(-0.3, 0.9),
-        normal.z + randRange(-0.7, 0.7),
-      ).multiplyScalar(randRange(1.6, 5.5));
-      this.emitParticle(point, v, Effects.SPARK, randRange(0.15, 0.4), randRange(0.6, 1.4), 9);
+  // ------------------------------------------------------------------
+  // clarões e luz
+  // ------------------------------------------------------------------
+
+  private lightAt(pos: THREE.Vector3, color: number, power: number, duration: number): void {
+    const f = this.flashes.find((x) => x.life <= 0);
+    if (!f) return;
+    f.light.position.copy(pos);
+    f.light.color.setHex(color);
+    f.light.visible = true;
+    f.life = f.maxLife = duration;
+    f.power = power;
+  }
+
+  /**
+   * Clarão do disparo NA CENA DO MUNDO. O flash preso ao viewmodel ilumina só a
+   * arma; este aqui é o que joga luz na parede ao seu lado e entrega o tiro.
+   */
+  muzzleBlast(worldPos: THREE.Vector3, direction: THREE.Vector3, strength: number): void {
+    this.lightAt(worldPos, 0xffb457, 19 * strength, 0.065);
+
+    // fagulhas de pólvora saindo pela boca do cano
+    for (let i = 0; i < Math.round(5 * strength); i++) {
+      _vel.copy(direction)
+        .multiplyScalar(randRange(4, 13) * strength)
+        .add(new THREE.Vector3(randRange(-1.6, 1.6), randRange(-1.2, 1.6), randRange(-1.6, 1.6)));
+      this.sparks.emit(
+        worldPos, _vel, i % 3 === 0 ? Effects.SPARK_HOT : Effects.SPARK,
+        randRange(0.05, 0.16), randRange(0.8, 2.2), 6, 5.5,
+      );
     }
-    for (let i = 0; i < 3; i++) {
-      const v = new THREE.Vector3(
-        normal.x + randRange(-0.5, 0.5), normal.y + randRange(0, 0.6), normal.z + randRange(-0.5, 0.5),
-      ).multiplyScalar(randRange(0.4, 1.2));
-      this.emitParticle(point, v, Effects.DUST, randRange(0.4, 0.8), randRange(1.5, 3), 1.2);
+
+    // Fumaça que sobe e abre. Nasce adiantada na direção do tiro: no ponto exato
+    // do cano ela ficaria colada na câmera e tomaria a tela inteira.
+    _pos.copy(worldPos).addScaledVector(direction, 0.5);
+    for (let i = 0; i < Math.round(3 * strength); i++) {
+      _vel.copy(direction)
+        .multiplyScalar(randRange(0.6, 1.8))
+        .add(new THREE.Vector3(randRange(-0.25, 0.25), randRange(0.25, 0.7), randRange(-0.25, 0.25)));
+      this.smoke.emit(
+        _pos, _vel, Effects.SMOKE,
+        randRange(0.4, 0.85), randRange(0.35, 0.7) * strength, -0.5, 1.5, 3, 0.3,
+      );
     }
-    this.addDecal(point, normal);
+  }
+
+  /** Cápsula saindo pela janela de ejeção. */
+  ejectShell(origin: THREE.Vector3, right: THREE.Vector3, up: THREE.Vector3): void {
+    const s = this.shells.find((x) => x.life <= 0);
+    if (!s) return;
+    s.mesh.position.copy(origin);
+    s.mesh.rotation.set(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28);
+    s.velocity.copy(right).multiplyScalar(randRange(1.6, 2.8))
+      .addScaledVector(up, randRange(1.6, 2.6))
+      .add(new THREE.Vector3(randRange(-0.4, 0.4), 0, randRange(-0.4, 0.4)));
+    s.spin.set(randRange(-18, 18), randRange(-18, 18), randRange(-18, 18));
+    s.life = 3.2;
+    s.bounces = 0;
+    s.mesh.visible = true;
+  }
+
+  // ------------------------------------------------------------------
+  // impactos
+  // ------------------------------------------------------------------
+
+  /**
+   * Faísca + poeira + buraco de bala numa superfície sólida.
+   * `incoming` é a direção do tiro: com ela as fagulhas ricocheteiam pra fora
+   * em vez de saírem em todas as direções.
+   */
+  impact(
+    point: THREE.Vector3, normal: THREE.Vector3,
+    incoming?: THREE.Vector3, withDecal = true,
+  ): void {
+    // reflexão: r = d - 2(d·n)n
+    if (incoming) {
+      _reflect.copy(incoming).addScaledVector(normal, -2 * incoming.dot(normal)).normalize();
+    } else {
+      _reflect.copy(normal);
+    }
+
+    this.lightAt(point, 0xffd9a0, 5, 0.05);
+
+    for (let i = 0; i < 10; i++) {
+      _vel.copy(_reflect)
+        .multiplyScalar(randRange(2.5, 9))
+        .add(new THREE.Vector3(randRange(-1.5, 1.5), randRange(-0.6, 1.8), randRange(-1.5, 1.5)));
+      this.sparks.emit(
+        point, _vel, i % 4 === 0 ? Effects.SPARK_HOT : Effects.SPARK,
+        randRange(0.14, 0.45), randRange(0.5, 1.5), 14, 2.4,
+      );
+    }
+
+    // lascas de material caindo
+    for (let i = 0; i < 4; i++) {
+      _vel.copy(normal)
+        .multiplyScalar(randRange(1, 2.6))
+        .add(new THREE.Vector3(randRange(-1, 1), randRange(0, 1.4), randRange(-1, 1)));
+      this.sparks.emit(point, _vel, Effects.DUST, randRange(0.4, 0.8), randRange(0.6, 1.2), 16, 1.6);
+    }
+
+    // nuvem de poeira que cresce e some
+    for (let i = 0; i < 5; i++) {
+      _vel.copy(normal)
+        .multiplyScalar(randRange(0.5, 1.6))
+        .add(new THREE.Vector3(randRange(-0.7, 0.7), randRange(0, 0.7), randRange(-0.7, 0.7)));
+      this.smoke.emit(
+        point, _vel, Effects.DUST, randRange(0.4, 0.9), randRange(0.7, 1.5), -0.3, 2.2, 3, 0.42,
+      );
+    }
+
+    if (withDecal) this.addDecal(point, normal);
   }
 
   /** Respingo de sangue — cor diferente pra leitura instantanea de "acertei". */
   blood(point: THREE.Vector3, direction: THREE.Vector3, heavy: boolean): void {
-    const count = heavy ? 16 : 8;
+    const count = heavy ? 22 : 11;
     for (let i = 0; i < count; i++) {
-      const v = new THREE.Vector3(
-        direction.x + randRange(-0.8, 0.8),
-        randRange(-0.2, 1.1),
-        direction.z + randRange(-0.8, 0.8),
-      ).multiplyScalar(randRange(1.5, heavy ? 6 : 4));
-      this.emitParticle(point, v, Effects.BLOOD, randRange(0.3, 0.7), randRange(1.2, 2.6), 11);
+      _vel.copy(direction)
+        .multiplyScalar(randRange(1.5, heavy ? 7 : 4.5))
+        .add(new THREE.Vector3(randRange(-1.6, 1.6), randRange(-0.3, 2), randRange(-1.6, 1.6)));
+      this.sparks.emit(
+        point, _vel, Effects.BLOOD, randRange(0.3, 0.7), randRange(1, 2.4), 15, 1.8,
+      );
+    }
+    // névoa vermelha atrás do alvo
+    for (let i = 0; i < (heavy ? 6 : 3); i++) {
+      _vel.copy(direction).multiplyScalar(randRange(1, 3))
+        .add(new THREE.Vector3(randRange(-0.5, 0.5), randRange(0, 0.8), randRange(-0.5, 0.5)));
+      this.smoke.emit(point, _vel, Effects.BLOOD, randRange(0.25, 0.5), randRange(0.9, 1.8), 2, 2.4, 2, 0.5);
     }
   }
 
-  /** Nuvem escura quando um inimigo morre. */
+  /** Nuvem quando um inimigo morre. */
   deathBurst(point: THREE.Vector3, color: number): void {
     const c = new THREE.Color(color);
-    for (let i = 0; i < 24; i++) {
-      const v = new THREE.Vector3(randRange(-1, 1), randRange(0.2, 1.4), randRange(-1, 1))
-        .multiplyScalar(randRange(1.5, 5));
-      this.emitParticle(point, v, c, randRange(0.5, 1.1), randRange(2, 4.5), 5);
+    for (let i = 0; i < 26; i++) {
+      _vel.set(randRange(-1, 1), randRange(0.2, 1.4), randRange(-1, 1)).multiplyScalar(randRange(1.5, 5));
+      this.sparks.emit(point, _vel, c, randRange(0.5, 1.1), randRange(2, 4.5), 5);
+    }
+    for (let i = 0; i < 8; i++) {
+      _vel.set(randRange(-0.8, 0.8), randRange(0.3, 1.2), randRange(-0.8, 0.8)).multiplyScalar(randRange(0.8, 2.4));
+      this.smoke.emit(point, _vel, Effects.SMOKE, randRange(0.7, 1.4), randRange(1.4, 2.8), -0.4, 1.6, 2.5, 0.45);
     }
   }
 
@@ -227,11 +472,11 @@ export class Effects {
     const m = this.decals[this.decalIndex]!;
     this.decalIndex = (this.decalIndex + 1) % this.decals.length;
     m.position.copy(point).addScaledVector(normal, 0.012);
-    m.lookAt(point.clone().add(normal));
+    m.lookAt(_pos.copy(point).add(normal));
     m.rotation.z = Math.random() * Math.PI * 2;
     m.scale.setScalar(randRange(0.7, 1.3));
     m.visible = true;
-    (m.material as THREE.MeshBasicMaterial).opacity = 0.9;
+    (m.material as THREE.MeshBasicMaterial).opacity = 0.72;
   }
 
   tracer(from: THREE.Vector3, to: THREE.Vector3): void {
@@ -241,8 +486,7 @@ export class Effects {
     t.from.copy(from);
     t.to.copy(to);
     t.progress = 0;
-    t.speed = FX.tracerSpeed;
-    t.life = from.distanceTo(to) / FX.tracerSpeed + 0.02;
+    t.life = from.distanceTo(to) / FX.tracerSpeed + 0.03;
     this.tracerMeshes[idx]!.visible = true;
   }
 
@@ -253,38 +497,8 @@ export class Effects {
   // ------------------------------------------------------------------
 
   update(dt: number): void {
-    // --- particulas (compactacao por swap-remove) ---
-    let i = 0;
-    while (i < this.pCount) {
-      const p = this.particles[i]!;
-      p.life -= dt;
-      if (p.life <= 0) {
-        const last = this.pCount - 1;
-        if (i !== last) {
-          this.particles[i] = this.particles[last]!;
-          this.particles[last] = p;
-          for (let k = 0; k < 3; k++) {
-            this.pPositions[i * 3 + k] = this.pPositions[last * 3 + k]!;
-            this.pColors[i * 3 + k] = this.pColors[last * 3 + k]!;
-          }
-          this.pSizes[i] = this.pSizes[last]!;
-        }
-        this.pCount--;
-        continue;
-      }
-      p.velocity.y -= p.gravity * dt;
-      p.velocity.multiplyScalar(1 - 2.2 * dt); // arrasto
-      this.pPositions[i * 3] += p.velocity.x * dt;
-      this.pPositions[i * 3 + 1] += p.velocity.y * dt;
-      this.pPositions[i * 3 + 2] += p.velocity.z * dt;
-      this.pSizes[i] = p.size * (p.life / p.maxLife);
-      i++;
-    }
-    const geo = this.points.geometry;
-    geo.setDrawRange(0, this.pCount);
-    geo.attributes.position!.needsUpdate = true;
-    geo.attributes.color!.needsUpdate = true;
-    geo.attributes.size!.needsUpdate = true;
+    this.sparks.update(dt);
+    this.smoke.update(dt);
 
     // --- tracers ---
     for (let k = 0; k < this.tracers.length; k++) {
@@ -292,20 +506,62 @@ export class Effects {
       const mesh = this.tracerMeshes[k]!;
       if (t.life <= 0) { mesh.visible = false; continue; }
       t.life -= dt;
-      t.progress += t.speed * dt;
+      if (t.life <= 0) { mesh.visible = false; continue; }
+      t.progress += FX.tracerSpeed * dt;
 
       const total = t.from.distanceTo(t.to);
       const head = Math.min(t.progress, total);
       const tail = Math.max(0, head - TRACER_LENGTH);
-      const dir = new THREE.Vector3().subVectors(t.to, t.from).normalize();
-      const a = t.from.clone().addScaledVector(dir, tail);
-      const b = t.from.clone().addScaledVector(dir, head);
+      _vel.subVectors(t.to, t.from).normalize();
+      const ax = t.from.x + _vel.x * tail, ay = t.from.y + _vel.y * tail, az = t.from.z + _vel.z * tail;
+      const bx = t.from.x + _vel.x * head, by = t.from.y + _vel.y * head, bz = t.from.z + _vel.z * head;
 
-      mesh.position.copy(a).add(b).multiplyScalar(0.5);
-      mesh.lookAt(b);
-      mesh.scale.z = Math.max(a.distanceTo(b), 0.01);
-      (mesh.material as THREE.MeshBasicMaterial).opacity = clamp(t.life * 6, 0, 0.85);
-      if (t.life <= 0) mesh.visible = false;
+      mesh.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+      mesh.lookAt(bx, by, bz);
+      mesh.scale.z = Math.max(Math.hypot(bx - ax, by - ay, bz - az), 0.01);
+      (mesh.material as THREE.MeshBasicMaterial).opacity = clamp(t.life * 9, 0, 0.9);
+    }
+
+    // --- capsulas ---
+    for (const s of this.shells) {
+      if (s.life <= 0) continue;
+      s.life -= dt;
+      if (s.life <= 0) { s.mesh.visible = false; continue; }
+
+      s.velocity.y -= 20 * dt;
+      s.mesh.position.addScaledVector(s.velocity, dt);
+      s.mesh.rotation.x += s.spin.x * dt;
+      s.mesh.rotation.y += s.spin.y * dt;
+      s.mesh.rotation.z += s.spin.z * dt;
+
+      const p = s.mesh.position;
+      const floor = this.groundHeightAt(p.x, p.z, p.y + 0.5) + 0.014;
+      if (p.y <= floor && s.velocity.y < 0) {
+        p.y = floor;
+        if (s.bounces === 0) this.onShellLand?.();
+        if (s.bounces < 2) {
+          s.bounces++;
+          s.velocity.y *= -0.34;
+          s.velocity.x *= 0.55;
+          s.velocity.z *= 0.55;
+          s.spin.multiplyScalar(0.5);
+        } else {
+          s.velocity.set(0, 0, 0);
+          s.spin.set(0, 0, 0);
+        }
+      }
+    }
+
+    // --- clarões ---
+    for (const f of this.flashes) {
+      if (f.life <= 0) continue;
+      f.life -= dt;
+      if (f.life <= 0) {
+        f.light.visible = false;
+        f.light.intensity = 0;
+        continue;
+      }
+      f.light.intensity = f.power * (f.life / f.maxLife);
     }
 
     // --- decals somem devagar ---
@@ -316,31 +572,34 @@ export class Effects {
       if (mat.opacity <= 0) d.visible = false;
     }
 
-    // --- screen shake (trauma^2 = mais natural que linear) ---
+    // --- screen shake (trauma^2 e' mais natural que linear) ---
     this.shakeTrauma = Math.max(0, this.shakeTrauma - FX.screenShakeDecay * dt * 0.14);
     const s = this.shakeTrauma * this.shakeTrauma;
     const now = performance.now() / 1000;
     this.shakeOffset.set(
-      Math.sin(now * 47) * s * 0.14,
-      Math.sin(now * 61 + 1.7) * s * 0.14,
-      Math.sin(now * 53 + 3.1) * s * 0.06,
+      Math.sin(now * 47) * s * 0.16,
+      Math.sin(now * 61 + 1.7) * s * 0.16,
+      Math.sin(now * 53 + 3.1) * s * 0.07,
     );
   }
 
   clear(): void {
-    this.pCount = 0;
-    this.points.geometry.setDrawRange(0, 0);
+    this.sparks.clear();
+    this.smoke.clear();
     for (let k = 0; k < this.tracers.length; k++) {
       this.tracers[k]!.life = 0;
       this.tracerMeshes[k]!.visible = false;
     }
+    for (const s of this.shells) { s.life = 0; s.mesh.visible = false; }
+    for (const f of this.flashes) { f.life = 0; f.light.visible = false; f.light.intensity = 0; }
     for (const d of this.decals) d.visible = false;
     this.shakeTrauma = 0;
     this.shakeOffset.set(0, 0, 0);
   }
 
   dispose(): void {
+    this.sparks.dispose();
+    this.smoke.dispose();
     for (const d of this.disposables) d.dispose();
-    for (const m of this.tracerMeshes) (m.material as THREE.Material).dispose();
   }
 }

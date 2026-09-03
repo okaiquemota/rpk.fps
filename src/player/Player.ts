@@ -103,6 +103,10 @@ export class Player {
 
   // ------------------------------------------------------------------
 
+  /** Quanto do giro de borda esta' ativo neste eixo, em [-1, 1]. */
+  edgeTurnX = 0;
+  edgeTurnY = 0;
+
   updateLook(input: Input, dt: number): void {
     const scale = 0.0022 * this.sensitivity * (1 - this.adsAmount * 0.35);
     this.yaw -= input.mouseDX * scale;
@@ -114,6 +118,19 @@ export class Player {
     if (input.isDown('ArrowRight')) this.yaw -= arrow;
     if (input.isDown('ArrowUp')) this.pitch += arrow;
     if (input.isDown('ArrowDown')) this.pitch -= arrow;
+
+    // Giro de borda: sem pointer lock o cursor encosta na moldura da janela e o
+    // movimento relativo morre ali. Levar o mouse para a beirada passa a girar
+    // sozinho, entao da' pra dar a volta completa.
+    this.edgeTurnX = 0;
+    this.edgeTurnY = 0;
+    if (input.fallback && input.pointerInside) {
+      this.edgeTurnX = edgeRamp(input.pointerNX);
+      this.edgeTurnY = edgeRamp(input.pointerNY);
+      const speed = EDGE_TURN_SPEED * this.sensitivity * (1 - this.adsAmount * 0.4) * dt;
+      this.yaw -= this.edgeTurnX * speed;
+      this.pitch -= this.edgeTurnY * speed * 0.65;
+    }
 
     this.pitch = clamp(this.pitch, -CAMERA.pitchLimit, CAMERA.pitchLimit);
 
@@ -140,8 +157,10 @@ export class Player {
 
     // ---- entrada de direcao ----
     let ix = 0, iz = 0;
-    if (input.isDown('KeyW')) iz -= 1;
-    if (input.isDown('KeyS')) iz += 1;
+    // iz positivo = para frente. A camera olha para -Z com yaw 0, e a conversao
+    // logo abaixo ja' cuida disso — inverter aqui trocava W com S.
+    if (input.isDown('KeyW')) iz += 1;
+    if (input.isDown('KeyS')) iz -= 1;
     if (input.isDown('KeyA')) ix -= 1;
     if (input.isDown('KeyD')) ix += 1;
     const inputLen = Math.hypot(ix, iz);
@@ -161,13 +180,15 @@ export class Player {
 
     // ---- correr ----
     // So' corre pra frente, sem agachar e sem mirar.
-    this.sprinting = input.isDown('ShiftLeft') && iz < -0.5 && !this.crouching && !this.wantsAds;
+    this.sprinting = input.isDown('ShiftLeft') && iz > 0.5 && !this.crouching && !this.wantsAds;
 
     // ---- aceleracao ----
     const sinYaw = Math.sin(this.yaw), cosYaw = Math.cos(this.yaw);
     // frente = (-sin, -cos); direita = (cos, -sin)
     const wishX = ix * cosYaw - iz * sinYaw;
     const wishZ = -ix * sinYaw - iz * cosYaw;
+    // Confira com yaw = 0: W (iz = 1) da' wish = (0, -1), que e' exatamente
+    // a direcao para onde a camera aponta.
 
     const maxSpeed = this.maxSpeedNow;
     const accel = this.grounded ? PLAYER.accelGround : PLAYER.accelAir;
@@ -345,3 +366,20 @@ export class Player {
 }
 
 const lerpZoom = (zoom: number, t: number): number => 1 + (zoom - 1) * t;
+
+/** Radianos por segundo no extremo da tela. */
+const EDGE_TURN_SPEED = 3.4;
+/** Fracao central da tela onde o giro de borda nao age. */
+const EDGE_DEADZONE = 0.55;
+
+/**
+ * Converte a posicao do ponteiro num eixo ([-1, 1]) na intensidade do giro.
+ * Zero no miolo, subindo em curva quadratica ate' 1 na beirada — assim o
+ * comeco do giro e' suave e o canto da tela vira de vez.
+ */
+function edgeRamp(n: number): number {
+  const a = Math.abs(n);
+  if (a <= EDGE_DEADZONE) return 0;
+  const t = Math.min((a - EDGE_DEADZONE) / (1 - EDGE_DEADZONE), 1);
+  return Math.sign(n) * t * t;
+}

@@ -119,6 +119,12 @@ export class AudioManager {
 
   impact(): void { this.noise(0.07, 0.2, 'highpass', 2400, 0.7); }
 
+  /** Capsula batendo no chao. Curto e agudo — e' metal pequeno. */
+  shellDrop(): void {
+    this.tone(randRange(2400, 3400), randRange(1400, 2000), 0.05, 0.055, 'triangle');
+    this.noise(0.04, 0.04, 'highpass', 4200, 1.4);
+  }
+
   hitFlesh(head: boolean): void {
     this.noise(head ? 0.1 : 0.07, head ? 0.34 : 0.2, 'lowpass', head ? 900 : 620);
     if (head) this.tone(1300, 700, 0.08, 0.2, 'sine');

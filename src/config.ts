@@ -75,8 +75,9 @@ export const WAVES = {
 
 export const FX = {
   maxDecals: 90,
-  maxParticles: 500,
-  tracerSpeed: 190,
+  maxParticles: 700,
+  maxSmoke: 260,
+  tracerSpeed: 260,
   screenShakeDecay: 7,
 } as const;
 

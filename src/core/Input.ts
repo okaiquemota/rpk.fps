@@ -6,6 +6,11 @@
  * recusa o pedido. Quando isso acontece entramos no modo `fallback`: o mouse
  * continua girando a camera enquanto o ponteiro estiver sobre a pagina, e as
  * setas do teclado viram uma alternativa completa de mira.
+ *
+ * Sem lock o cursor para na borda da janela e o movimento relativo zera — a
+ * camera trava e voce nao consegue dar meia-volta. Por isso rastreamos tambem a
+ * POSICAO do ponteiro (`pointerNX`/`pointerNY`): quem cuida do giro continuo
+ * perto da borda e' o Player, com base nesses valores.
  */
 export class Input {
   private keys = new Set<string>();
@@ -22,6 +27,11 @@ export class Input {
   locked = false;
   /** Sem pointer lock disponivel: mira pelo movimento do mouse solto + setas. */
   fallback = false;
+  /** Posicao do ponteiro em [-1, 1] a partir do centro da janela. */
+  pointerNX = 0;
+  pointerNY = 0;
+  /** O ponteiro esta' sobre a janela? (fora dela nao ha' giro de borda) */
+  pointerInside = false;
   onLockChange: ((locked: boolean) => void) | null = null;
   onFallback: (() => void) | null = null;
 
@@ -36,6 +46,8 @@ export class Input {
     window.addEventListener('mouseup', this.onMouseUp);
     window.addEventListener('wheel', this.onWheel, { passive: true });
     window.addEventListener('blur', this.onBlur);
+    document.addEventListener('mouseleave', this.onMouseLeave);
+    document.addEventListener('mouseenter', this.onMouseEnter);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
     document.addEventListener('pointerlockerror', this.onPointerLockError);
     // Sem menu de contexto: botao direito e' mirar.
@@ -58,6 +70,13 @@ export class Input {
   };
 
   private onMouseMove = (e: MouseEvent): void => {
+    // A posicao vale mesmo sem o jogo ativo: e' o que alimenta o giro de borda
+    // assim que a partida comeca.
+    const w = window.innerWidth, h = window.innerHeight;
+    this.pointerNX = w > 0 ? (e.clientX / w) * 2 - 1 : 0;
+    this.pointerNY = h > 0 ? (e.clientY / h) * 2 - 1 : 0;
+    this.pointerInside = true;
+
     if (!this.active) return;
     this.mouseDX += e.movementX;
     this.mouseDY += e.movementY;
@@ -81,7 +100,11 @@ export class Input {
   private onBlur = (): void => {
     this.keys.clear();
     this.buttons.clear();
+    this.pointerInside = false;
   };
+
+  private onMouseLeave = (): void => { this.pointerInside = false; };
+  private onMouseEnter = (): void => { this.pointerInside = true; };
 
   private onPointerLockChange = (): void => {
     this.locked = document.pointerLockElement === this.canvas;
@@ -149,6 +172,8 @@ export class Input {
     window.removeEventListener('mouseup', this.onMouseUp);
     window.removeEventListener('wheel', this.onWheel);
     window.removeEventListener('blur', this.onBlur);
+    document.removeEventListener('mouseleave', this.onMouseLeave);
+    document.removeEventListener('mouseenter', this.onMouseEnter);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     document.removeEventListener('pointerlockerror', this.onPointerLockError);
   }

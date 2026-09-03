@@ -15,6 +15,8 @@ export interface ShotReport {
   headshots: number;
   kills: Enemy[];
   anyHit: boolean;
+  /** Pellets que bateram em geometria do nivel (pra som de ricochete). */
+  surfaceHits: number;
 }
 
 const _dir = new THREE.Vector3();
@@ -41,7 +43,7 @@ export class CombatSystem {
   fire(player: Player, weapon: Weapon, muzzleWorld: THREE.Vector3): ShotReport {
     const report: ShotReport = {
       pellets: weapon.def.pellets, pelletsHit: 0, totalDamage: 0,
-      headshots: 0, kills: [], anyHit: false,
+      headshots: 0, kills: [], anyHit: false, surfaceHits: 0,
     };
 
     const origin = player.eyePosition;
@@ -109,7 +111,11 @@ export class CombatSystem {
         if (headshot) report.headshots++;
         if (result.killed) report.kills.push(hitEnemy);
       } else if (closest < maxDist) {
-        this.effects.impact(_point, hitNormal ?? _dir.clone().negate());
+        // Um buraco por pellet empilha 9 decais no mesmo palmo de parede e vira
+        // uma mancha preta; espalhar em alguns ja' le' como padrao de chumbo.
+        const withDecal = weapon.def.pellets === 1 || i % 3 === 0;
+        this.effects.impact(_point, hitNormal ?? _dir.clone().negate(), _dir, withDecal);
+        report.surfaceHits++;
       }
 
       // Um tracer por pellet polui demais na escopeta; um a cada tres resolve.

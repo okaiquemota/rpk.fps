@@ -23,6 +23,12 @@ const COMBO_WINDOW = 4;
 const MAX_COMBO = 10;
 const _playerBox = new AABB();
 const _tmp = new THREE.Vector3();
+const _camRight = new THREE.Vector3();
+const _camUp = new THREE.Vector3();
+const _ejectAt = new THREE.Vector3();
+const _muzzle = new THREE.Vector3();
+/** A que distancia do olho o clarao e o tracer nascem, em metros. */
+const MUZZLE_WORLD_DISTANCE = 0.85;
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -37,7 +43,7 @@ export class Game {
   private level: Level;
   private player: Player;
   private viewModel = new ViewModel();
-  private effects = new Effects();
+  private effects: Effects;
   private projectiles = new ProjectileSystem();
   private pickups = new PickupManager();
   private enemies: EnemyManager;
@@ -84,6 +90,11 @@ export class Game {
 
     // ---------- mundo ----------
     this.level = new Level();
+    // As capsulas ejetadas precisam saber onde e' o chao pra parar em cima da
+    // caixa certa, e nao atravessar tudo ate' o infinito.
+    this.effects = new Effects((x, z, fromY) => this.level.groundHeightAt(x, z, fromY));
+    this.effects.onShellLand = () => this.audio.shellDrop();
+
     this.scene.add(this.level.group);
     this.scene.add(this.effects.group);
     this.scene.add(this.projectiles.group);
@@ -133,7 +144,10 @@ export class Game {
     this.input = new Input(canvas);
     this.input.onLockChange = (locked) => this.onPointerLockChange(locked);
     this.input.onFallback = () => {
-      this.hud.showToast('MOUSE SOLTO', 'Aqui nao da pra capturar o cursor — mire com o mouse sobre a tela ou com as setas');
+      this.hud.showToast(
+        'MOUSE SOLTO',
+        'Aqui o navegador nao deixa capturar o cursor. Leve o mouse ate a borda da tela para continuar girando — ou use as setas',
+      );
     };
 
     // Clicar no jogo tenta recapturar o mouse (perde-se ao trocar de aba).
@@ -388,18 +402,43 @@ export class Game {
     const player = this.player;
     const weapon = player.weapon;
 
-    // As matrizes precisam estar atualizadas pra pegar a boca do cano no mundo.
+    // Onde fica a boca do cano NO MUNDO?
+    //
+    // A arma e' desenhada noutra cena, com camera e FOV proprios, entao aplicar
+    // a matriz da camera do mundo no ponto local erra o alvo: o flash sai solto
+    // no ar, longe do cano que voce ve'. O jeito certo e' passar pela TELA —
+    // projetar o ponto na camera do viewmodel e desprojetar na do mundo, o que
+    // devolve um ponto que cai exatamente sobre o cano desenhado.
     this.viewModel.group.updateMatrixWorld(true);
-    const localMuzzle = this.viewModel.muzzleWorldPosition;
-    // A arma vive na cena de viewmodel (camera na origem): converter pro mundo.
-    const muzzleWorld = localMuzzle.clone().applyMatrix4(player.camera.matrixWorld);
+    const ndc = this.viewModel.muzzleWorldPosition.project(this.viewCamera);
+    const muzzleWorld = _muzzle.set(ndc.x, ndc.y, 0.5)
+      .unproject(player.camera)
+      .sub(player.eyePosition)
+      .normalize()
+      .multiplyScalar(MUZZLE_WORLD_DISTANCE)
+      .add(player.eyePosition);
 
     const report = this.combat.fire(player, weapon, muzzleWorld);
 
     this.shotsFired++;
     if (report.anyHit) this.shotsHit++;
 
+    // Clarao que ilumina o mundo (o do viewmodel so' acende a arma) e a
+    // capsula saindo pela direita.
+    const forward = player.forward();
+    const strength = weapon.def.muzzleScale;
+    this.effects.muzzleBlast(muzzleWorld, forward, strength);
+
+    _camRight.set(1, 0, 0).applyQuaternion(player.camera.quaternion);
+    _camUp.set(0, 1, 0).applyQuaternion(player.camera.quaternion);
+    _ejectAt.copy(player.eyePosition)
+      .addScaledVector(_camRight, 0.24)
+      .addScaledVector(forward, 0.34)
+      .addScaledVector(_camUp, -0.1);
+    this.effects.ejectShell(_ejectAt, _camRight, _camUp);
+
     this.audio.shot(weapon.def.id);
+    if (report.surfaceHits > 0) this.audio.impact();
     this.viewModel.onFire(weapon.def.kickback);
     player.addRecoil(
       weapon.def.recoilPitch * (1 - player.adsAmount * 0.3),
@@ -484,6 +523,7 @@ export class Game {
         player.takeDamage(hit.damage, hit.position);
       }
       this.effects.impact(hit.position, _tmp.set(0, 1, 0));
+      this.audio.impact();
     }
 
     for (const kind of this.pickups.update(dt, player.position)) this.onPickup(kind);
@@ -516,6 +556,7 @@ export class Game {
     );
     this.hud.setWave(Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave);
     this.hud.setScore(this.score, this.kills, this.combo);
+    this.hud.setEdgeTurn(player.edgeTurnX, player.edgeTurnY);
     this.hud.setCrosshairSpread(
       weapon.currentSpread(player.adsAmount, player.horizontalSpeed > 1.2, !player.grounded),
       player.adsAmount,

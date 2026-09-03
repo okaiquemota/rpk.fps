@@ -59,6 +59,17 @@ body.playing { cursor: none; }
   100% { opacity: 0; transform: scale(1.35); }
 }
 
+/* Bordas que acendem quando o giro automatico esta' agindo. So' aparecem
+   quando o navegador nao deixou capturar o cursor. */
+#edge-turn { position: absolute; inset: 0; }
+.edge { position: absolute; opacity: 0; transition: opacity 90ms linear; }
+.e-l, .e-r { top: 0; bottom: 0; width: 16%; }
+.e-t, .e-b { left: 0; right: 0; height: 16%; }
+.e-l { left: 0; background: linear-gradient(to right, rgba(255, 157, 46, 0.4), transparent); }
+.e-r { right: 0; background: linear-gradient(to left, rgba(255, 157, 46, 0.4), transparent); }
+.e-t { top: 0; background: linear-gradient(to bottom, rgba(255, 157, 46, 0.4), transparent); }
+.e-b { bottom: 0; background: linear-gradient(to top, rgba(255, 157, 46, 0.4), transparent); }
+
 #damage-vignette, #low-hp-vignette {
   position: absolute; inset: 0; pointer-events: none;
 }

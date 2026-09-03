@@ -188,7 +188,7 @@ export class ViewModel {
   onFire(kickback: number): void {
     this.recoilOffset = Math.min(this.recoilOffset + kickback, 0.3);
     this.recoilRot = Math.min(this.recoilRot + kickback * 2.6, 0.6);
-    this.flashTimer = 0.045;
+    this.flashTimer = 0.055;
   }
 
   onReloadStart(): void { this.reloadAmount = 1; }
@@ -258,8 +258,8 @@ export class ViewModel {
       const t = this.flashTimer / 0.045;
       (rig.flash.material as THREE.MeshBasicMaterial).opacity = t;
       rig.flash.rotation.z = Math.random() * Math.PI;
-      rig.flash.scale.setScalar(lerp(0.6, 1.25, Math.random()));
-      rig.flashLight.intensity = t * 14;
+      rig.flash.scale.setScalar(lerp(0.75, 1.5, Math.random()));
+      rig.flashLight.intensity = t * 22;
     } else {
       rig.flashLight.intensity = 0;
     }
