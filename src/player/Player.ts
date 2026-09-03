@@ -1,0 +1,339 @@
+import * as THREE from 'three';
+import { CAMERA, PLAYER } from '../config';
+import { clamp, damp } from '../core/math';
+import type { Input } from '../core/Input';
+import type { Level } from '../world/Level';
+import { canStandAt, moveCharacter } from '../world/Physics';
+import { Weapon } from '../weapons/Weapon';
+import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from '../weapons/WeaponDefs';
+
+export interface PlayerEvents {
+  onFootstep(): void;
+  onJump(): void;
+  onLand(force: number): void;
+  onHurt(damage: number, fromDirection: THREE.Vector3): void;
+  onDeath(): void;
+  onWeaponSwitch(id: WeaponId): void;
+}
+
+export class Player {
+  readonly camera: THREE.PerspectiveCamera;
+  readonly position = new THREE.Vector3();   // base (pes)
+  readonly velocity = new THREE.Vector3();
+
+  yaw = 0;
+  pitch = 0;
+  sensitivity = 1;
+  baseFov: number = CAMERA.fov;
+
+  health: number = PLAYER.maxHealth;
+  armor = 0;
+  alive = true;
+
+  grounded = false;
+  crouching = false;
+  sprinting = false;
+  private currentHeight: number = PLAYER.heightStand;
+  private timeSinceDamage = 99;
+  private coyote = 0;
+  private jumpBuffered = 0;
+  private stepDistance = 0;
+  private landDip = 0;
+  private lastFallSpeed = 0;
+
+  /** Recuo de camera aplicado por cima do look do jogador; volta sozinho. */
+  private recoilPitch = 0;
+  private recoilYaw = 0;
+  private recoilPitchTarget = 0;
+  private recoilYawTarget = 0;
+
+  adsAmount = 0;
+  wantsAds = false;
+
+  readonly weapons = new Map<WeaponId, Weapon>();
+  currentWeaponId: WeaponId = 'pistol';
+
+  constructor(private level: Level, private events: PlayerEvents) {
+    this.camera = new THREE.PerspectiveCamera(
+      CAMERA.fov, window.innerWidth / window.innerHeight, CAMERA.near, CAMERA.far,
+    );
+    for (const id of WEAPON_ORDER) {
+      this.weapons.set(id, new Weapon(WEAPON_DEFS[id], id === 'pistol'));
+    }
+    this.respawn();
+  }
+
+  get weapon(): Weapon { return this.weapons.get(this.currentWeaponId)!; }
+  get eyeHeight(): number { return this.currentHeight - PLAYER.eyeOffset; }
+  get eyePosition(): THREE.Vector3 {
+    return new THREE.Vector3(this.position.x, this.position.y + this.eyeHeight, this.position.z);
+  }
+  get horizontalSpeed(): number { return Math.hypot(this.velocity.x, this.velocity.z); }
+  get maxSpeedNow(): number {
+    if (this.crouching) return PLAYER.speedCrouch;
+    if (this.sprinting) return PLAYER.speedSprint;
+    return PLAYER.speedWalk;
+  }
+
+  forward(out = new THREE.Vector3()): THREE.Vector3 {
+    const p = this.pitch + this.recoilPitch;
+    const y = this.yaw + this.recoilYaw;
+    return out.set(-Math.sin(y) * Math.cos(p), Math.sin(p), -Math.cos(y) * Math.cos(p)).normalize();
+  }
+
+  respawn(): void {
+    this.position.copy(this.level.playerStart);
+    this.velocity.set(0, 0, 0);
+    this.yaw = 0;
+    this.pitch = 0;
+    this.health = PLAYER.maxHealth;
+    this.armor = 0;
+    this.alive = true;
+    this.crouching = false;
+    this.currentHeight = PLAYER.heightStand;
+    this.timeSinceDamage = 99;
+    this.recoilPitch = this.recoilYaw = this.recoilPitchTarget = this.recoilYawTarget = 0;
+    this.adsAmount = 0;
+    this.currentWeaponId = 'pistol';
+    for (const w of this.weapons.values()) {
+      w.reset();
+      w.unlocked = w.def.id === 'pistol';
+    }
+  }
+
+  // ------------------------------------------------------------------
+
+  updateLook(input: Input, dt: number): void {
+    const scale = 0.0022 * this.sensitivity * (1 - this.adsAmount * 0.35);
+    this.yaw -= input.mouseDX * scale;
+    this.pitch -= input.mouseDY * scale;
+    this.pitch = clamp(this.pitch, -CAMERA.pitchLimit, CAMERA.pitchLimit);
+
+    // O recuo sobe rapido e desce devagar — a arma "puxa" e depois assenta.
+    this.recoilPitch = damp(this.recoilPitch, this.recoilPitchTarget, 22, dt);
+    this.recoilYaw = damp(this.recoilYaw, this.recoilYawTarget, 22, dt);
+    this.recoilPitchTarget = damp(this.recoilPitchTarget, 0, 6.5, dt);
+    this.recoilYawTarget = damp(this.recoilYawTarget, 0, 6.5, dt);
+  }
+
+  addRecoil(pitch: number, yaw: number): void {
+    this.recoilPitchTarget += pitch;
+    this.recoilYawTarget += (Math.random() * 2 - 1) * yaw;
+  }
+
+  updateMovement(input: Input, dt: number): void {
+    if (!this.alive) {
+      this.velocity.x = damp(this.velocity.x, 0, 6, dt);
+      this.velocity.z = damp(this.velocity.z, 0, 6, dt);
+      this.velocity.y -= PLAYER.gravity * dt;
+      moveCharacter(this.position, this.velocity, PLAYER.radius, 0.6, this.level.colliders, dt, 0);
+      return;
+    }
+
+    // ---- entrada de direcao ----
+    let ix = 0, iz = 0;
+    if (input.isDown('KeyW')) iz -= 1;
+    if (input.isDown('KeyS')) iz += 1;
+    if (input.isDown('KeyA')) ix -= 1;
+    if (input.isDown('KeyD')) ix += 1;
+    const inputLen = Math.hypot(ix, iz);
+    if (inputLen > 0) { ix /= inputLen; iz /= inputLen; }
+
+    // ---- agachar ----
+    const wantCrouch = input.isDown('ControlLeft') || input.isDown('ControlRight') || input.isDown('KeyC');
+    if (wantCrouch) {
+      this.crouching = true;
+    } else if (this.crouching) {
+      // So' levanta se tiver teto livre.
+      const probe = this.position.clone();
+      if (canStandAt(probe, PLAYER.radius, PLAYER.heightStand, this.level.colliders)) this.crouching = false;
+    }
+    const targetHeight = this.crouching ? PLAYER.heightCrouch : PLAYER.heightStand;
+    this.currentHeight = damp(this.currentHeight, targetHeight, PLAYER.crouchLerp, dt);
+
+    // ---- correr ----
+    // So' corre pra frente, sem agachar e sem mirar.
+    this.sprinting = input.isDown('ShiftLeft') && iz < -0.5 && !this.crouching && !this.wantsAds;
+
+    // ---- aceleracao ----
+    const sinYaw = Math.sin(this.yaw), cosYaw = Math.cos(this.yaw);
+    // frente = (-sin, -cos); direita = (cos, -sin)
+    const wishX = ix * cosYaw - iz * sinYaw;
+    const wishZ = -ix * sinYaw - iz * cosYaw;
+
+    const maxSpeed = this.maxSpeedNow;
+    const accel = this.grounded ? PLAYER.accelGround : PLAYER.accelAir;
+
+    if (inputLen > 0) {
+      this.velocity.x += wishX * accel * dt;
+      this.velocity.z += wishZ * accel * dt;
+
+      const speed = this.horizontalSpeed;
+      const cap = this.grounded ? maxSpeed : Math.max(maxSpeed, speed); // no ar nao freia o momentum
+      if (speed > cap) {
+        const k = cap / speed;
+        this.velocity.x *= k;
+        this.velocity.z *= k;
+      }
+    } else if (this.grounded) {
+      const f = Math.max(0, 1 - PLAYER.frictionGround * dt);
+      this.velocity.x *= f;
+      this.velocity.z *= f;
+      if (this.horizontalSpeed < 0.05) { this.velocity.x = 0; this.velocity.z = 0; }
+    }
+
+    // ---- pulo (com coyote time e buffer) ----
+    if (input.wasPressed('Space')) this.jumpBuffered = PLAYER.jumpBuffer;
+    this.jumpBuffered = Math.max(0, this.jumpBuffered - dt);
+    this.coyote = this.grounded ? PLAYER.coyoteTime : Math.max(0, this.coyote - dt);
+
+    if (this.jumpBuffered > 0 && this.coyote > 0) {
+      this.velocity.y = PLAYER.jumpVelocity;
+      this.grounded = false;
+      this.coyote = 0;
+      this.jumpBuffered = 0;
+      this.events.onJump();
+    }
+
+    // ---- gravidade + colisao ----
+    this.velocity.y = Math.max(this.velocity.y - PLAYER.gravity * dt, -PLAYER.maxFallSpeed);
+    this.lastFallSpeed = this.velocity.y;
+
+    const wasGrounded = this.grounded;
+    const result = moveCharacter(
+      this.position, this.velocity, PLAYER.radius, this.currentHeight,
+      this.level.colliders, dt, PLAYER.stepHeight,
+    );
+    this.grounded = result.grounded;
+
+    if (!wasGrounded && this.grounded) {
+      const force = Math.abs(this.lastFallSpeed);
+      if (force > 6) {
+        this.landDip = clamp(force / PLAYER.maxFallSpeed, 0, 1) * CAMERA.landingDip;
+        this.events.onLand(force);
+        // Queda alta machuca — ensina o jogador a nao se jogar das plataformas.
+        if (force > 20) this.takeDamage((force - 20) * 2.4, this.position.clone().add(new THREE.Vector3(0, 1, 0)));
+      }
+    }
+
+    // ---- passos ----
+    if (this.grounded && this.horizontalSpeed > 0.6) {
+      this.stepDistance += this.horizontalSpeed * dt;
+      const stride = this.sprinting ? 2.4 : this.crouching ? 2.6 : 1.9;
+      if (this.stepDistance >= stride) {
+        this.stepDistance = 0;
+        this.events.onFootstep();
+      }
+    } else {
+      this.stepDistance = 1.2; // proximo passo sai logo ao voltar a andar
+    }
+
+    // ---- regeneracao ----
+    this.timeSinceDamage += dt;
+    if (this.timeSinceDamage > PLAYER.regenDelay && this.health < PLAYER.regenCap) {
+      this.health = Math.min(PLAYER.regenCap, this.health + PLAYER.regenRate * dt);
+    }
+  }
+
+  updateCamera(dt: number, shake: THREE.Vector3): void {
+    const eye = this.position.y + this.eyeHeight;
+    this.landDip = damp(this.landDip, 0, 9, dt);
+
+    // Head bob acompanha a velocidade real, nao a tecla apertada.
+    const speed01 = clamp(this.horizontalSpeed / PLAYER.speedSprint, 0, 1);
+    const bobT = performance.now() / 1000;
+    const bobAmp = CAMERA.bobAmount * speed01 * (this.grounded ? 1 : 0) * (1 - this.adsAmount * 0.8);
+    const bobY = Math.abs(Math.sin(bobT * CAMERA.bobFrequency)) * bobAmp;
+    const bobX = Math.sin(bobT * CAMERA.bobFrequency * 0.5) * bobAmp * 0.7;
+
+    this.camera.position.set(
+      this.position.x + bobX + shake.x,
+      eye + bobY - this.landDip + shake.y,
+      this.position.z + shake.z,
+    );
+
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.y = this.yaw + this.recoilYaw;
+    this.camera.rotation.x = this.pitch + this.recoilPitch;
+    // Leve inclinacao lateral ao andar de lado — barato e vende movimento.
+    const strafe = this.velocity.x * -Math.sin(this.yaw + Math.PI / 2) + this.velocity.z * -Math.cos(this.yaw + Math.PI / 2);
+    this.camera.rotation.z = damp(this.camera.rotation.z, clamp(strafe * 0.004, -0.03, 0.03), 8, dt);
+
+    // FOV: mirar fecha, correr abre um pouco.
+    const def = this.weapon.def;
+    const sprintBoost = this.sprinting ? 4 : 0;
+    const targetFov = this.baseFov * lerpZoom(def.adsZoom, this.adsAmount) + sprintBoost;
+    if (Math.abs(this.camera.fov - targetFov) > 0.01) {
+      this.camera.fov = damp(this.camera.fov, targetFov, 12, dt);
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
+  updateAds(dt: number, wants: boolean): void {
+    this.wantsAds = wants && !this.sprinting && !this.weapon.reloading;
+    const rate = 1 / Math.max(this.weapon.def.adsTime, 0.01);
+    this.adsAmount = clamp(
+      this.adsAmount + (this.wantsAds ? rate : -rate) * dt, 0, 1,
+    );
+  }
+
+  switchWeapon(id: WeaponId): boolean {
+    if (id === this.currentWeaponId) return false;
+    const w = this.weapons.get(id);
+    if (!w || !w.unlocked) return false;
+    this.weapon.cancelReload();
+    this.currentWeaponId = id;
+    this.adsAmount = 0;
+    this.events.onWeaponSwitch(id);
+    return true;
+  }
+
+  cycleWeapon(dir: number): void {
+    const unlocked = WEAPON_ORDER.filter((id) => this.weapons.get(id)!.unlocked);
+    if (unlocked.length < 2) return;
+    const i = unlocked.indexOf(this.currentWeaponId);
+    const next = unlocked[(i + dir + unlocked.length * 2) % unlocked.length]!;
+    this.switchWeapon(next);
+  }
+
+  takeDamage(amount: number, fromPosition: THREE.Vector3): void {
+    if (!this.alive) return;
+
+    let remaining = amount;
+    if (this.armor > 0) {
+      const absorbed = Math.min(this.armor, remaining * PLAYER.armorAbsorb);
+      this.armor -= absorbed;
+      remaining -= absorbed;
+    }
+    this.health -= remaining;
+    this.timeSinceDamage = 0;
+
+    const dir = fromPosition.clone().sub(this.eyePosition).normalize();
+    this.events.onHurt(amount, dir);
+
+    if (this.health <= 0) {
+      this.health = 0;
+      this.alive = false;
+      this.events.onDeath();
+    }
+  }
+
+  heal(amount: number): number {
+    const before = this.health;
+    this.health = Math.min(PLAYER.maxHealth, this.health + amount);
+    return this.health - before;
+  }
+
+  addArmor(amount: number): number {
+    const before = this.armor;
+    this.armor = Math.min(PLAYER.maxArmor, this.armor + amount);
+    return this.armor - before;
+  }
+
+  onResize(): void {
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+  }
+}
+
+const lerpZoom = (zoom: number, t: number): number => 1 + (zoom - 1) * t;

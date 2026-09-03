@@ -1,0 +1,41 @@
+import { Game } from './core/Game';
+
+const canvas = document.getElementById('viewport') as HTMLCanvasElement | null;
+
+if (!canvas) {
+  throw new Error('canvas #viewport nao encontrado');
+}
+
+// WebGL pode simplesmente nao existir (driver, GPU bloqueada, navegador antigo).
+// Melhor uma mensagem clara do que uma tela preta silenciosa.
+const supportsWebGL = (): boolean => {
+  try {
+    const test = document.createElement('canvas');
+    return !!(test.getContext('webgl2') ?? test.getContext('webgl'));
+  } catch {
+    return false;
+  }
+};
+
+if (!supportsWebGL()) {
+  document.body.innerHTML =
+    '<div style="display:grid;place-items:center;height:100%;font-family:monospace;color:#e8e6e3;text-align:center;padding:24px">' +
+    '<div><h1>WebGL indisponivel</h1><p style="opacity:.6;margin-top:12px">' +
+    'Este navegador nao consegue rodar o jogo. Tente ativar a aceleracao de hardware.</p></div></div>';
+} else {
+  const game = new Game(canvas);
+
+  // Gancho de depuracao: no console do navegador da' pra bisbilhotar
+  // o estado do jogo (`__RPK.player`, `__RPK.enemies`, ...).
+  (window as unknown as { __RPK: Game }).__RPK = game;
+
+  // Clicar em qualquer lugar recaptura o mouse quando o jogo esta' rodando.
+  window.addEventListener('mousedown', () => {
+    const menuOpen = document.querySelectorAll('.screen:not(.hidden)').length > 0;
+    if (!menuOpen && !document.pointerLockElement) canvas.requestPointerLock();
+  });
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => game.dispose());
+  }
+}

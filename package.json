@@ -1,0 +1,21 @@
+{
+  "name": "rpk-fps",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "FPS de arena feito em TypeScript + Three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}
