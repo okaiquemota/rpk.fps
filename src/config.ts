@@ -68,6 +68,8 @@ export const WAVES = {
   baseEnemies: 4,
   enemiesPerWave: 1.7,
   maxAlive: 16,
+  /** Teto de inimigos numa onda, tempero incluso. */
+  maxPerWave: 32,
   spawnInterval: 0.85,
   healthPerWave: 0.09, // +9% de vida por onda
   speedPerWave: 0.022,

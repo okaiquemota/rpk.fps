@@ -12,6 +12,7 @@ const AVOID_ANGLES = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4, 2.1, -2.1];
 
 const _dir = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
+const _eye = new THREE.Vector3();
 
 /**
  * Geometrias reaproveitadas por tipo de inimigo. Sao identicas entre instancias
@@ -83,9 +84,15 @@ export class Enemy {
   private speedScale: number;
   private stuckTimer = 0;
   private lastPos = new THREE.Vector3();
+  /** O jogador esta' a vista? Reavaliado algumas vezes por segundo. */
+  private canSeePlayer = false;
+  private sightTimer = Math.random() * 0.2;
 
   /** Ataque pronto pra ser resolvido pelo manager neste frame. */
   pendingAttack = false;
+  /** Um passo acabou de sair — o manager toca o som posicionado. */
+  pendingStep = false;
+  private stepDistance = 0;
 
   constructor(kind: EnemyKind, spawn: THREE.Vector3, healthScale: number, speedScale: number) {
     this.def = ENEMY_DEFS[kind];
@@ -209,6 +216,17 @@ export class Enemy {
     const distance = _dir.length();
     if (distance > 0.001) _dir.divideScalar(distance);
 
+    // Linha de visao: um raycast por inimigo a cada frame seria caro, e a
+    // informacao nao muda tao rapido assim. O sorteio inicial do timer espalha
+    // as checagens entre frames em vez de amontoar todas no mesmo.
+    this.sightTimer -= dt;
+    if (this.sightTimer <= 0) {
+      this.sightTimer = 0.14 + Math.random() * 0.1;
+      _tmp.set(this.position.x, this.position.y + this.def.height * 0.62, this.position.z);
+      _eye.set(playerPos.x, playerPos.y + 1.3, playerPos.z);
+      this.canSeePlayer = level.hasLineOfSight(_tmp, _eye);
+    }
+
     this.attackTimer = Math.max(0, this.attackTimer - dt);
 
     // ---- ataque ----
@@ -220,7 +238,14 @@ export class Enemy {
         if (this.def.ranged || distance <= this.def.attackRange + 0.6) this.pendingAttack = true;
         this.state = 'chasing';
       }
-    } else if (this.state !== 'spawning' && distance <= this.def.attackRange && this.attackTimer <= 0) {
+    } else if (
+      this.state !== 'spawning'
+      && distance <= this.def.attackRange
+      && this.attackTimer <= 0
+      // Atirar na parede porque voce esta' atras dela e' o tipo de coisa que
+      // faz a IA parecer burra. Corpo a corpo nao precisa: ja' esta' colado.
+      && (!this.def.ranged || this.canSeePlayer)
+    ) {
       this.state = 'attacking';
       this.windupTimer = this.def.windup;
       this.attackTimer = this.def.attackCooldown;
@@ -252,13 +277,27 @@ export class Enemy {
     }
     this.lastPos.copy(this.position);
 
+    // Passos: distancia percorrida, nao tempo — assim o ritmo acompanha a
+    // velocidade real de cada tipo.
+    if (this.grounded && this.state !== 'spawning') {
+      const speed = Math.hypot(this.velocity.x, this.velocity.z);
+      this.stepDistance += speed * dt;
+      const stride = 1.5 + this.def.height * 0.5;
+      if (this.stepDistance >= stride) {
+        this.stepDistance = 0;
+        this.pendingStep = true;
+      }
+    }
+
     this.syncTransform();
     this.updateAnimation(dt, _dir, distance);
   }
 
   private updateNavigation(dt: number, distance: number, level: Level, neighbors: readonly Enemy[]): void {
     const stopDistance = this.def.ranged ? this.def.attackRange * 0.75 : this.def.attackRange * 0.7;
-    const wantsToClose = distance > stopDistance;
+    // Sem angulo de tiro, o atirador para de recuar e vai procurar um.
+    const blindShooter = this.def.ranged && !this.canSeePlayer;
+    const wantsToClose = blindShooter || distance > stopDistance;
 
     this.repathTimer -= dt;
     if (this.repathTimer <= 0) {
@@ -270,10 +309,10 @@ export class Enemy {
     if (wantsToClose) {
       desiredX = this.moveDir.x;
       desiredZ = this.moveDir.z;
-    } else if (this.def.ranged && distance < stopDistance * 0.6) {
+    } else if (this.def.ranged && !blindShooter && distance < stopDistance * 0.6) {
       desiredX = -_dir.x; // atirador recua se voce chegar perto demais
       desiredZ = -_dir.z;
-    } else if (this.def.ranged) {
+    } else if (this.def.ranged && !blindShooter) {
       // strafe lateral enquanto atira: alvo mais dificil
       desiredX = -_dir.z * 0.7;
       desiredZ = _dir.x * 0.7;

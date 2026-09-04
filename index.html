@@ -18,6 +18,8 @@
       <div id="hitmarker"></div>
     </div>
 
+    <div id="hit-dirs"></div>
+
     <div id="edge-turn">
       <div class="edge e-l"></div><div class="edge e-r"></div>
       <div class="edge e-t"></div><div class="edge e-b"></div>
@@ -44,7 +46,7 @@
     </div>
 
     <div id="hud-top-left">
-      <div id="wave-label">ONDA <span id="wave-value">1</span></div>
+      <div id="wave-label">ONDA <span id="wave-value">1</span><span id="wave-mod"></span></div>
       <div id="enemies-left">INIMIGOS: <span id="enemies-value">0</span></div>
     </div>
 
@@ -110,6 +112,15 @@
     </div>
   </div>
 
+  <div id="screen-upgrade" class="screen hidden">
+    <div class="panel wide">
+      <h2>ONDA <span id="up-wave">1</span> LIMPA</h2>
+      <p class="tagline">Escolha uma melhoria para a proxima onda.</p>
+      <div id="upgrade-cards"></div>
+      <p class="hint">Clique numa carta, ou tecle <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></p>
+    </div>
+  </div>
+
   <div id="screen-gameover" class="screen hidden">
     <div class="panel">
       <h2 class="dead">VOCE MORREU</h2>
@@ -118,6 +129,9 @@
         <div><b id="go-kills">0</b><span>ABATES</span></div>
         <div><b id="go-score">0</b><span>PONTOS</span></div>
         <div><b id="go-accuracy">0%</b><span>PRECISAO</span></div>
+      </div>
+      <div id="go-upgrades" class="taken"></div>
+      <div style="display:none">
       </div>
       <div id="go-best" class="best"></div>
       <button class="primary" id="btn-restart">TENTAR DE NOVO</button>

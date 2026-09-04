@@ -1,4 +1,5 @@
 import { clamp } from '../core/math';
+import type { Stats } from '../player/Stats';
 import type { WeaponDef } from './WeaponDefs';
 
 export type FireResult = 'fired' | 'empty' | 'cooldown' | 'reloading' | 'locked';
@@ -20,23 +21,26 @@ export class Weapon {
   /** Dispersao acumulada pelos tiros recentes (soma-se a` dispersao base). */
   bloom = 0;
 
-  constructor(def: WeaponDef, unlocked: boolean) {
+  /** `stats` e' a MESMA referencia do jogador: melhoria aplicada vale na hora. */
+  constructor(def: WeaponDef, unlocked: boolean, private stats: Stats) {
     this.def = def;
     this.ammoInMag = def.magSize;
     this.reserve = def.startReserve;
     this.unlocked = unlocked;
   }
 
-  get shotInterval(): number { return 60 / this.def.rpm; }
+  get shotInterval(): number { return 60 / (this.def.rpm * this.stats.fireRateMult); }
+  get magSize(): number { return Math.round(this.def.magSize * this.stats.magSizeMult); }
+  get reloadTime(): number { return this.def.reloadTime * this.stats.reloadMult; }
   get hasInfiniteReserve(): boolean { return this.def.reserveMax < 0; }
   get isMagEmpty(): boolean { return this.ammoInMag <= 0; }
   get canReload(): boolean {
     return !this.reloading
-      && this.ammoInMag < this.def.magSize
+      && this.ammoInMag < this.magSize
       && (this.hasInfiniteReserve || this.reserve > 0);
   }
   get reloadProgress(): number {
-    return this.reloading ? 1 - this.reloadTimer / this.def.reloadTime : 1;
+    return this.reloading ? 1 - this.reloadTimer / this.reloadTime : 1;
   }
 
   update(dt: number): 'reload-finished' | null {
@@ -68,7 +72,7 @@ export class Weapon {
   startReload(): boolean {
     if (!this.canReload) return false;
     this.reloading = true;
-    this.reloadTimer = this.def.reloadTime;
+    this.reloadTimer = this.reloadTime;
     return true;
   }
 
@@ -78,7 +82,7 @@ export class Weapon {
   }
 
   private finishReload(): void {
-    const missing = this.def.magSize - this.ammoInMag;
+    const missing = this.magSize - this.ammoInMag;
     const taken = this.hasInfiniteReserve ? missing : Math.min(missing, this.reserve);
     this.ammoInMag += taken;
     if (!this.hasInfiniteReserve) this.reserve -= taken;
@@ -89,7 +93,7 @@ export class Weapon {
   /** Dispersao efetiva agora, em radianos. */
   currentSpread(ads: number, moving: boolean, airborne: boolean): number {
     const base = this.def.spreadHip + (this.def.spreadAds - this.def.spreadHip) * ads;
-    let spread = base + this.bloom * (1 - ads * 0.55);
+    let spread = (base + this.bloom * (1 - ads * 0.55)) * this.stats.spreadMult;
     if (moving) spread += this.def.spreadMoving * (1 - ads * 0.5);
     if (airborne) spread *= 1.8;
     return spread;
@@ -104,6 +108,12 @@ export class Weapon {
     return 1 + (d.falloffMin - 1) * t;
   }
 
+  /** Devolve parte do carregador — usado pela melhoria "catador". */
+  refillFraction(fraction: number): void {
+    if (fraction <= 0) return;
+    this.ammoInMag = Math.min(this.magSize, this.ammoInMag + Math.ceil(this.magSize * fraction));
+  }
+
   /** Retorna quanta municao foi realmente aceita. */
   addAmmo(amount: number): number {
     if (this.hasInfiniteReserve) return 0;
@@ -113,7 +123,7 @@ export class Weapon {
   }
 
   reset(): void {
-    this.ammoInMag = this.def.magSize;
+    this.ammoInMag = this.magSize;
     this.reserve = this.def.startReserve;
     this.cooldown = 0;
     this.reloadTimer = 0;

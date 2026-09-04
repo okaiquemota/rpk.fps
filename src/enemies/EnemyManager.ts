@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { WAVES } from '../config';
-import { pick, randRange } from '../core/math';
+import { clamp, pick, randRange } from '../core/math';
 import type { Level } from '../world/Level';
 import { Enemy } from './Enemy';
 import { ENEMY_DEFS, type EnemyKind } from './EnemyTypes';
@@ -21,7 +21,43 @@ export interface EnemyManagerEvents {
   onWaveStart(index: number): void;
   onWaveClear(index: number): void;
   onEnemySpawn(enemy: Enemy): void;
+  onEnemyStep(enemy: Enemy): void;
+  onEnemyShoot(enemy: Enemy): void;
 }
+
+/**
+ * Temperos de onda: mudam a composicao sem mexer no balanceamento base.
+ * Uma onda de trinta corredores fracos joga muito diferente de uma com tres
+ * brutamontes, e as duas saem da mesma tabela de inimigos.
+ */
+export type WaveModifier = 'normal' | 'horda' | 'elite' | 'cerco';
+
+interface ModifierSpec {
+  label: string;
+  countMult: number;
+  healthMult: number;
+  scoreMult: number;
+  /** Se definido, a onda inteira e' desse tipo. */
+  forceKind?: EnemyKind;
+  /** Fracao da onda trocada por atiradores. */
+  shooterShare?: number;
+  minWave: number;
+}
+
+const MODIFIERS: Record<WaveModifier, ModifierSpec> = {
+  normal: { label: '', countMult: 1, healthMult: 1, scoreMult: 1, minWave: 1 },
+  horda: {
+    label: 'HORDA', countMult: 1.9, healthMult: 0.55, scoreMult: 0.8,
+    forceKind: 'runner', minWave: 4,
+  },
+  elite: {
+    label: 'ELITE', countMult: 0.55, healthMult: 2.1, scoreMult: 1.8, minWave: 6,
+  },
+  cerco: {
+    label: 'CERCO', countMult: 0.85, healthMult: 1, scoreMult: 1.3,
+    shooterShare: 0.6, minWave: 5,
+  },
+};
 
 const _v = new THREE.Vector3();
 
@@ -30,6 +66,7 @@ export class EnemyManager {
   readonly enemies: Enemy[] = [];
 
   waveIndex = 0;
+  modifier: WaveModifier = 'normal';
   private pendingSpawns: EnemyKind[] = [];
   private spawnTimer = 0;
   private breakTimer: number = WAVES.firstWaveDelay;
@@ -55,13 +92,33 @@ export class EnemyManager {
     };
   }
 
+  /** Rotulo do tempero da onda atual, vazio quando e' uma onda comum. */
+  get modifierLabel(): string { return MODIFIERS[this.modifier].label; }
+  get modifierScoreMult(): number { return MODIFIERS[this.modifier].scoreMult; }
+
   /** Total de inimigos restantes na onda (vivos + por nascer). */
   get remainingInWave(): number { return this.aliveCount + this.pendingSpawns.length; }
 
   // ------------------------------------------------------------------
 
+  /** Sorteia o tempero desta onda. Onda "normal" continua sendo a mais comum. */
+  private rollModifier(wave: number): WaveModifier {
+    const candidates = (Object.keys(MODIFIERS) as WaveModifier[])
+      .filter((m) => m !== 'normal' && wave >= MODIFIERS[m].minWave);
+    if (candidates.length === 0) return 'normal';
+    // Uma onda especial a cada tres, em media.
+    if (Math.random() > 0.34) return 'normal';
+    return pick(candidates);
+  }
+
   private composeWave(wave: number): EnemyKind[] {
-    const total = Math.round(WAVES.baseEnemies + (wave - 1) * WAVES.enemiesPerWave);
+    const mod = MODIFIERS[this.modifier];
+    // O teto existe pra onda nao virar espera: com `maxAlive` limitando quantos
+    // ficam vivos ao mesmo tempo, uma lista gigante so' alonga o intervalo.
+    const total = clamp(
+      Math.round((WAVES.baseEnemies + (wave - 1) * WAVES.enemiesPerWave) * mod.countMult),
+      2, WAVES.maxPerWave,
+    );
     const available = (Object.keys(ENEMY_DEFS) as EnemyKind[])
       .filter((k) => wave >= ENEMY_DEFS[k].minWave);
 
@@ -75,15 +132,33 @@ export class EnemyManager {
     }
 
     const list: EnemyKind[] = [];
-    for (let i = 0; i < total; i++) list.push(pick(pool));
+    // Teto de brutamontes: o sorteio ponderado sozinho ja' produziu ondas com
+    // metade do time de tanques, o que vira uma parede em vez de uma onda.
+    const bruteCap = Math.max(1, Math.floor(total * 0.18));
+    let brutes = 0;
+
+    for (let i = 0; i < total; i++) {
+      if (mod.forceKind) { list.push(mod.forceKind); continue; }
+      if (mod.shooterShare && Math.random() < mod.shooterShare && wave >= ENEMY_DEFS.shooter.minWave) {
+        list.push('shooter');
+        continue;
+      }
+      let kind = pick(pool);
+      if (kind === 'brute') {
+        if (brutes >= bruteCap) kind = pick(pool.filter((k) => k !== 'brute'));
+        else brutes++;
+      }
+      list.push(kind);
+    }
 
     // Toda onda multipla de 5 ganha um brutamontes garantido.
-    if (wave >= 5 && wave % 5 === 0) list.push('brute');
+    if (wave >= 5 && wave % 5 === 0 && !mod.forceKind) list.push('brute');
     return list;
   }
 
   startNextWave(): void {
     this.waveIndex++;
+    this.modifier = this.rollModifier(this.waveIndex);
     this.pendingSpawns = this.composeWave(this.waveIndex);
     this.spawnTimer = 0;
     this.waveActive = true;
@@ -98,7 +173,8 @@ export class EnemyManager {
     const source = candidates.length > 0 ? candidates : this.level.spawnPoints;
     const spot = pick(source);
 
-    const healthScale = 1 + (this.waveIndex - 1) * WAVES.healthPerWave;
+    const healthScale = (1 + (this.waveIndex - 1) * WAVES.healthPerWave)
+      * MODIFIERS[this.modifier].healthMult;
     const speedScale = Math.min(1.45, 1 + (this.waveIndex - 1) * WAVES.speedPerWave);
 
     const pos = new THREE.Vector3(
@@ -143,6 +219,11 @@ export class EnemyManager {
         continue;
       }
 
+      if (enemy.pendingStep) {
+        enemy.pendingStep = false;
+        this.events.onEnemyStep(enemy);
+      }
+
       if (enemy.pendingAttack) {
         enemy.pendingAttack = false;
         if (playerAlive) this.resolveAttack(enemy, playerPosition);
@@ -159,6 +240,7 @@ export class EnemyManager {
       _v.y += randRange(-0.03, 0.03);
       _v.z += randRange(-0.05, 0.05);
       this.projectiles.spawn(from, _v, enemy.def.projectileSpeed, enemy.def.damage);
+      this.events.onEnemyShoot(enemy);
     } else {
       this.events.onMeleeAttack(enemy.def.damage, enemy.center());
     }
@@ -181,6 +263,7 @@ export class EnemyManager {
     this.enemies.length = 0;
     this.pendingSpawns.length = 0;
     this.waveIndex = 0;
+    this.modifier = 'normal';
     this.waveActive = false;
     this.breakTimer = WAVES.firstWaveDelay;
     this.spawnTimer = 0;

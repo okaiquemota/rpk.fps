@@ -1,7 +1,9 @@
 import * as THREE from 'three';
-import { AABB, distanceToBoxXZ, randRange } from '../core/math';
+import { AABB, distanceToBoxXZ, randRange, rayAABB } from '../core/math';
 import { WORLD } from '../config';
 import { crateTexture, floorTexture, wallTexture } from './textures';
+
+const _losDir = new THREE.Vector3();
 
 interface BlockSpec {
   x: number; y: number; z: number;
@@ -265,6 +267,19 @@ export class Level {
     }
     const limit = this.size / 2 - radius - 0.5;
     return Math.abs(x) < limit && Math.abs(z) < limit;
+  }
+
+  /** Existe parede entre estes dois pontos? */
+  hasLineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    _losDir.subVectors(to, from);
+    const dist = _losDir.length();
+    if (dist < 0.001) return true;
+    _losDir.divideScalar(dist);
+    for (const box of this.colliders) {
+      const t = rayAABB(from, _losDir, box, dist);
+      if (t >= 0 && t < dist) return false;
+    }
+    return true;
   }
 
   /** Altura do chao em (x, z): topo do bloco mais alto abaixo de `fromY`. */

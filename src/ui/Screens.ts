@@ -1,4 +1,5 @@
 import { STORAGE_KEY } from '../config';
+import type { Upgrade } from '../player/Stats';
 
 export interface Settings {
   sensitivity: number;
@@ -39,6 +40,7 @@ export class Screens {
   private start = $('screen-start');
   private pause = $('screen-pause');
   private gameover = $('screen-gameover');
+  private upgrade = $('screen-upgrade');
   private loading = $('loading');
 
   save: SaveData;
@@ -48,6 +50,7 @@ export class Screens {
   onRestart: (() => void) | null = null;
   onSettingsChange: ((s: Settings) => void) | null = null;
   onFullscreen: (() => void) | null = null;
+  onUpgradePicked: ((u: Upgrade) => void) | null = null;
 
   constructor() {
     this.save = this.load();
@@ -123,12 +126,62 @@ export class Screens {
     $('vol-value').textContent = String(Math.round(s.volume * 100));
   }
 
+  /**
+   * Oferta de melhorias entre ondas. Devolve o foco pro teclado: as teclas
+   * 1..3 escolhem sem tirar a mao do lugar.
+   */
+  showUpgrades(wave: number, options: Upgrade[], taken: Map<string, number>): void {
+    $('up-wave').textContent = String(wave);
+
+    const box = $('upgrade-cards');
+    box.replaceChildren();
+    box.style.gridTemplateColumns = `repeat(${Math.max(1, options.length)}, 1fr)`;
+
+    options.forEach((up, i) => {
+      const card = document.createElement('button');
+      card.className = 'up-card';
+      card.type = 'button';
+
+      const stacks = taken.get(up.id) ?? 0;
+      const key = document.createElement('div');
+      key.className = 'up-key';
+      key.textContent = String(i + 1);
+      const name = document.createElement('div');
+      name.className = 'up-name';
+      name.textContent = up.name;
+      const desc = document.createElement('div');
+      desc.className = 'up-desc';
+      desc.textContent = up.description;
+      const st = document.createElement('div');
+      st.className = 'up-stacks';
+      st.textContent = stacks > 0 ? `JA TEM ${stacks} DE ${up.maxStacks}` : `ATE ${up.maxStacks}x`;
+
+      card.append(key, name, desc, st);
+      card.addEventListener('click', () => this.onUpgradePicked?.(up));
+      box.appendChild(card);
+    });
+
+    this.setVisible(this.upgrade);
+    (box.firstElementChild as HTMLElement | null)?.focus();
+  }
+
+  /** Escolha por teclado (1..3) enquanto a oferta esta' aberta. */
+  pickUpgradeByIndex(index: number): boolean {
+    const cards = $('upgrade-cards').children;
+    const card = cards[index] as HTMLElement | undefined;
+    if (!card) return false;
+    card.click();
+    return true;
+  }
+
+  get upgradeVisible(): boolean { return !this.upgrade.classList.contains('hidden'); }
+
   hideLoading(): void { this.loading.classList.add('hidden'); }
   showStart(): void { this.setVisible(this.start); }
   showPause(): void { this.setVisible(this.pause); }
   hideAll(): void { this.setVisible(null); }
 
-  showGameOver(stats: RunStats): void {
+  showGameOver(stats: RunStats, upgrades?: { name: string; count: number }[]): void {
     $('go-wave').textContent = String(stats.wave);
     $('go-kills').textContent = String(stats.kills);
     $('go-score').textContent = String(stats.score);
@@ -140,6 +193,16 @@ export class Screens {
     if (stats.wave > this.save.bestWave) this.save.bestWave = stats.wave;
     this.persist();
 
+    // Mostra o "build" com que a pessoa chegou ate' ali.
+    const list = $('go-upgrades');
+    list.replaceChildren();
+    for (const u of upgrades ?? []) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = u.count > 1 ? `${u.name} x${u.count}` : u.name;
+      list.appendChild(chip);
+    }
+
     const best = $('go-best');
     best.classList.toggle('new', isRecord);
     best.textContent = isRecord
@@ -150,7 +213,7 @@ export class Screens {
   }
 
   private setVisible(target: HTMLElement | null): void {
-    for (const el of [this.start, this.pause, this.gameover]) {
+    for (const el of [this.start, this.pause, this.gameover, this.upgrade]) {
       el.classList.toggle('hidden', el !== target);
     }
   }

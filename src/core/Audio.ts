@@ -1,8 +1,15 @@
 import { clamp, randRange } from './math';
 
+/** Posicao no mundo, pros sons que vem de algum lugar. */
+export interface SoundPos { x: number; y: number; z: number; }
+
 /**
  * Som 100% procedural (WebAudio) — zero arquivos pra baixar.
  * Cada efeito e' um envelope sobre ruido e/ou osciladores.
+ *
+ * Os sons que vem do mundo (inimigo, impacto, item) passam por um PannerNode e
+ * chegam do lado certo, com o volume caindo pela distancia. Os do jogador
+ * (tiro, recarga, passos) vao direto pro master: eles acontecem na sua cabeca.
  */
 export class AudioManager {
   private ctx: AudioContext | null = null;
@@ -45,7 +52,64 @@ export class AudioManager {
 
   private now(): number { return this.ctx?.currentTime ?? 0; }
 
-  private noise(duration: number, gain: number, filterType: BiquadFilterType, freq: number, q = 1): void {
+  /** Onde estao os ouvidos do jogador. Chamado uma vez por frame. */
+  setListener(pos: SoundPos, forward: SoundPos, up: SoundPos): void {
+    const l = this.ctx?.listener;
+    if (!l) return;
+    if (l.positionX) {
+      const t = this.now();
+      l.positionX.setValueAtTime(pos.x, t);
+      l.positionY.setValueAtTime(pos.y, t);
+      l.positionZ.setValueAtTime(pos.z, t);
+      l.forwardX.setValueAtTime(forward.x, t);
+      l.forwardY.setValueAtTime(forward.y, t);
+      l.forwardZ.setValueAtTime(forward.z, t);
+      l.upX.setValueAtTime(up.x, t);
+      l.upY.setValueAtTime(up.y, t);
+      l.upZ.setValueAtTime(up.z, t);
+    } else {
+      // Caminho antigo, ainda presente em alguns navegadores.
+      const legacy = l as unknown as {
+        setPosition(x: number, y: number, z: number): void;
+        setOrientation(fx: number, fy: number, fz: number, ux: number, uy: number, uz: number): void;
+      };
+      legacy.setPosition?.(pos.x, pos.y, pos.z);
+      legacy.setOrientation?.(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+    }
+  }
+
+  /**
+   * Destino de um efeito: o master direto, ou um panner posicionado.
+   * `equalpower` em vez de `HRTF` — a diferenca e' sutil num jogo com tanto
+   * som simultaneo, e o custo de CPU do HRTF nao e'.
+   */
+  private destination(at?: SoundPos): AudioNode {
+    if (!this.ctx || !this.master) return this.master as unknown as AudioNode;
+    if (!at) return this.master;
+
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'equalpower';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 5;
+    panner.maxDistance = 110;
+    panner.rolloffFactor = 1.15;
+    if (panner.positionX) {
+      const t = this.now();
+      panner.positionX.setValueAtTime(at.x, t);
+      panner.positionY.setValueAtTime(at.y, t);
+      panner.positionZ.setValueAtTime(at.z, t);
+    } else {
+      (panner as unknown as { setPosition(x: number, y: number, z: number): void })
+        .setPosition?.(at.x, at.y, at.z);
+    }
+    panner.connect(this.master);
+    return panner;
+  }
+
+  private noise(
+    duration: number, gain: number, filterType: BiquadFilterType, freq: number,
+    q = 1, at?: SoundPos,
+  ): void {
     if (!this.ctx || !this.master || !this.noiseBuffer) return;
     const t = this.now();
     const src = this.ctx.createBufferSource();
@@ -63,14 +127,14 @@ export class AudioManager {
     env.gain.linearRampToValueAtTime(gain, t + 0.004);
     env.gain.exponentialRampToValueAtTime(0.0001, t + duration);
 
-    src.connect(filter).connect(env).connect(this.master);
+    src.connect(filter).connect(env).connect(this.destination(at));
     src.start(t);
     src.stop(t + duration + 0.02);
   }
 
   private tone(
     freqStart: number, freqEnd: number, duration: number, gain: number,
-    type: OscillatorType = 'sine', delay = 0,
+    type: OscillatorType = 'sine', delay = 0, at?: SoundPos,
   ): void {
     if (!this.ctx || !this.master) return;
     const t = this.now() + delay;
@@ -84,7 +148,7 @@ export class AudioManager {
     env.gain.linearRampToValueAtTime(gain, t + 0.005);
     env.gain.exponentialRampToValueAtTime(0.0001, t + duration);
 
-    osc.connect(env).connect(this.master);
+    osc.connect(env).connect(this.destination(at));
     osc.start(t);
     osc.stop(t + duration + 0.02);
   }
@@ -117,7 +181,7 @@ export class AudioManager {
 
   weaponSwitch(): void { this.tone(560, 900, 0.07, 0.18, 'triangle'); }
 
-  impact(): void { this.noise(0.07, 0.2, 'highpass', 2400, 0.7); }
+  impact(at?: SoundPos): void { this.noise(0.07, 0.2, 'highpass', 2400, 0.7, at); }
 
   /** Capsula batendo no chao. Curto e agudo — e' metal pequeno. */
   shellDrop(): void {
@@ -125,19 +189,25 @@ export class AudioManager {
     this.noise(0.04, 0.04, 'highpass', 4200, 1.4);
   }
 
-  hitFlesh(head: boolean): void {
-    this.noise(head ? 0.1 : 0.07, head ? 0.34 : 0.2, 'lowpass', head ? 900 : 620);
-    if (head) this.tone(1300, 700, 0.08, 0.2, 'sine');
+  hitFlesh(head: boolean, at?: SoundPos): void {
+    this.noise(head ? 0.1 : 0.07, head ? 0.34 : 0.2, 'lowpass', head ? 900 : 620, 1, at);
+    if (head) this.tone(1300, 700, 0.08, 0.2, 'sine', 0, at);
   }
 
   hitmarker(head: boolean): void { this.tone(head ? 1500 : 1050, head ? 1500 : 1050, 0.035, 0.16, 'square'); }
 
-  enemyDeath(): void {
-    this.tone(280, 60, 0.4, 0.24, 'sawtooth');
-    this.noise(0.3, 0.16, 'lowpass', 700);
+  enemyDeath(at?: SoundPos): void {
+    this.tone(280, 60, 0.4, 0.24, 'sawtooth', 0, at);
+    this.noise(0.3, 0.16, 'lowpass', 700, 1, at);
   }
 
-  enemyAlert(): void { this.tone(200, 420, 0.22, 0.14, 'sawtooth'); }
+  enemyAlert(at?: SoundPos): void { this.tone(200, 420, 0.22, 0.14, 'sawtooth', 0, at); }
+
+  /** Tiro de inimigo: precisa ser localizavel, e' o que te avisa do perigo. */
+  enemyShot(at?: SoundPos): void {
+    this.noise(0.14, 0.3, 'bandpass', randRange(900, 1300), 1.4, at);
+    this.tone(520, 180, 0.12, 0.16, 'square', 0, at);
+  }
 
   playerHurt(): void {
     this.tone(220, 90, 0.26, 0.3, 'sawtooth');
@@ -160,6 +230,11 @@ export class AudioManager {
   pickup(kind: 'health' | 'ammo'): void {
     if (kind === 'health') { this.tone(620, 940, 0.1, 0.22, 'sine'); this.tone(940, 1250, 0.12, 0.16, 'sine', 0.08); }
     else { this.tone(420, 640, 0.08, 0.2, 'square'); }
+  }
+
+  /** Passo de inimigo — da' pra ouvir alguem chegando por tras. */
+  enemyStep(at: SoundPos): void {
+    this.noise(0.06, randRange(0.16, 0.26), 'bandpass', randRange(300, 700), 1.3, at);
   }
 
   waveStart(): void {

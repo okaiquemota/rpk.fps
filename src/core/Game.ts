@@ -16,9 +16,11 @@ import { ENEMY_DEFS, type EnemyKind } from '../enemies/EnemyTypes';
 import { ProjectileSystem } from '../enemies/Projectile';
 import { Effects } from '../fx/Effects';
 import { HUD } from '../ui/HUD';
+import { WorldMarkers } from '../ui/WorldMarkers';
 import { Screens, type Settings } from '../ui/Screens';
+import { rollUpgrades, UPGRADES, type Upgrade } from '../player/Stats';
 
-type GameState = 'menu' | 'playing' | 'paused' | 'dead';
+type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'upgrading';
 
 const COMBO_WINDOW = 4;
 const MAX_COMBO = 10;
@@ -28,8 +30,17 @@ const _camRight = new THREE.Vector3();
 const _camUp = new THREE.Vector3();
 const _ejectAt = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
+const _listenerFwd = new THREE.Vector3();
+const _listenerUp = new THREE.Vector3();
 /** A que distancia do olho o clarao e o tracer nascem, em metros. */
 const MUZZLE_WORLD_DISTANCE = 0.85;
+/** Uma linha explicando cada tempero de onda, na hora que ele aparece. */
+const MODIFIER_HINTS: Record<string, string> = {
+  HORDA: 'Muitos, rapidos e fracos — nao deixe cercar',
+  ELITE: 'Poucos e duros, mas valem bem mais pontos',
+  CERCO: 'Atiradores por toda parte — use as coberturas',
+};
+
 const PICKUP_KINDS: PickupKind[] = ['health', 'armor', 'ammo', 'weapon-rifle', 'weapon-shotgun'];
 
 export class Game {
@@ -53,6 +64,7 @@ export class Game {
   private enemies: EnemyManager;
   private combat: CombatSystem;
   private hud = new HUD();
+  private markers = new WorldMarkers();
   private screens = new Screens();
 
   private state: GameState = 'menu';
@@ -109,10 +121,16 @@ export class Game {
       onFootstep: () => this.audio.footstep(),
       onJump: () => this.audio.jump(),
       onLand: (force) => this.audio.land(force),
-      onHurt: (damage) => {
+      onHurt: (damage, fromDirection) => {
         this.audio.playerHurt();
         this.hud.flashDamage();
         this.effects.addShake(clamp(damage / 45, 0.12, 0.5));
+
+        // Angulo no espaco do jogador: 0 e' de frente, +PI/2 pela direita.
+        const yaw = this.player.yaw;
+        const lateral = fromDirection.x * Math.cos(yaw) - fromDirection.z * Math.sin(yaw);
+        const frontal = -fromDirection.x * Math.sin(yaw) - fromDirection.z * Math.cos(yaw);
+        this.hud.showHitDirection(Math.atan2(lateral, frontal));
       },
       onDeath: () => this.onPlayerDeath(),
       onWeaponSwitch: (id) => {
@@ -126,7 +144,9 @@ export class Game {
       onEnemyKilled: (enemy) => this.onEnemyKilled(enemy),
       onWaveStart: (index) => this.onWaveStart(index),
       onWaveClear: (index) => this.onWaveClear(index),
-      onEnemySpawn: () => this.audio.enemyAlert(),
+      onEnemySpawn: (enemy) => this.audio.enemyAlert(enemy.center()),
+      onEnemyStep: (enemy) => this.audio.enemyStep(enemy.position),
+      onEnemyShoot: (enemy) => this.audio.enemyShot(enemy.muzzlePosition()),
     });
     this.scene.add(this.enemies.group);
 
@@ -170,6 +190,7 @@ export class Game {
     this.screens.onRestart = () => this.startRun();
     this.screens.onSettingsChange = (s) => this.applySettings(s);
     this.screens.onFullscreen = () => { this.requestFullscreen(); this.resume(); };
+    this.screens.onUpgradePicked = (u) => this.applyUpgrade(u);
     this.applySettings(this.screens.save.settings);
 
     window.addEventListener('resize', this.onResize);
@@ -288,6 +309,7 @@ export class Game {
     this.projectiles.clear();
     this.pickups.clear();
     this.effects.clear();
+    this.markers.clear();
     this.hud.reset();
 
     this.score = 0;
@@ -353,13 +375,16 @@ export class Game {
 
   private finishRun(): void {
     this.hud.hide();
+    const taken = [...this.player.upgradesTaken.entries()]
+      .map(([id, count]) => ({ name: UPGRADES.find((u) => u.id === id)?.name ?? id, count }))
+      .sort((a, b) => b.count - a.count);
     this.screens.showGameOver({
       wave: Math.max(1, this.enemies.waveIndex),
       kills: this.kills,
       score: this.score,
       shotsFired: this.shotsFired,
       shotsHit: this.shotsHit,
-    });
+    }, taken);
   }
 
   // ==================================================================
@@ -368,7 +393,13 @@ export class Game {
 
   private onWaveStart(index: number): void {
     this.audio.waveStart();
-    this.hud.showToast(`ONDA ${index}`, this.waveSubtitle(index));
+    if (this.player.stats.armorPerWave > 0) this.player.addArmor(this.player.stats.armorPerWave);
+
+    const mod = this.enemies.modifierLabel;
+    this.hud.showToast(
+      mod ? `ONDA ${index} · ${mod}` : `ONDA ${index}`,
+      mod ? MODIFIER_HINTS[mod] ?? '' : this.waveSubtitle(index),
+    );
 
     // Armas novas chegam como item no chao, perto do centro.
     if (index === 2) this.dropWeapon('weapon-rifle');
@@ -400,7 +431,8 @@ export class Game {
     this.audio.waveClear();
     const bonus = index * 100;
     this.score += bonus;
-    this.hud.showToast('ONDA LIMPA', `+${bonus} pontos · proxima onda em instantes`);
+    this.hud.showToast('ONDA LIMPA', `+${bonus} pontos`);
+    this.offerUpgrades(index);
 
     // Recompensa de sobrevivencia: um kit no centro entre ondas.
     const spot = this.level.playerStart.clone().lerp(new THREE.Vector3(0, 0, 0), 0.5);
@@ -409,13 +441,43 @@ export class Game {
     if (index % 3 === 0) this.pickups.spawn('armor', spot.clone().add(new THREE.Vector3(-2, 0, 0)));
   }
 
+  /**
+   * Abre a escolha de melhorias. O jogo congela aqui — sem isso a onda seguinte
+   * chegaria enquanto a pessoa le' as cartas.
+   */
+  private offerUpgrades(wave: number): void {
+    const options = rollUpgrades(this.player.upgradesTaken, 3);
+    if (options.length === 0) return; // tudo no maximo: segue o jogo
+
+    this.state = 'upgrading';
+    document.body.classList.remove('playing');
+    this.input.releaseLock();
+    this.screens.showUpgrades(wave, options, this.player.upgradesTaken);
+  }
+
+  private applyUpgrade(upgrade: Upgrade): void {
+    if (this.state !== 'upgrading') return;
+    this.player.takeUpgrade(upgrade);
+    this.hud.showToast(upgrade.name, upgrade.description);
+
+    this.state = 'playing';
+    document.body.classList.add('playing');
+    this.screens.hideAll();
+    this.input.resetPointerIdle();
+    this.input.requestLock(true);
+  }
+
   private onEnemyKilled(enemy: Enemy): void {
     this.kills++;
     this.comboTimer = COMBO_WINDOW;
     this.combo = Math.min(MAX_COMBO, this.combo + 1);
-    this.score += Math.round(enemy.def.score * this.combo * 0.5);
+    this.score += Math.round(enemy.def.score * this.combo * 0.5 * this.enemies.modifierScoreMult);
 
-    this.audio.enemyDeath();
+    this.audio.enemyDeath(enemy.center());
+
+    const stats = this.player.stats;
+    if (stats.lifestealPerKill > 0) this.player.heal(stats.lifestealPerKill);
+    if (stats.ammoOnKill > 0) this.player.weapon.refillFraction(stats.ammoOnKill);
 
     if (Math.random() < enemy.def.dropChance) {
       const roll = Math.random();
@@ -551,12 +613,17 @@ export class Game {
     );
     this.effects.addShake(weapon.def.shakeAmount * 0.06);
 
+    for (const hit of report.hits) {
+      this.markers.showDamage(hit.point, hit.damage, hit.headshot, hit.killed);
+      if (!hit.killed) this.markers.trackEnemy(hit.enemy);
+    }
+
     if (report.anyHit) {
       const killed = report.kills.length > 0;
       const head = report.headshots > 0;
       this.hud.showHitmarker(killed, head);
       this.audio.hitmarker(head);
-      this.audio.hitFlesh(head);
+      this.audio.hitFlesh(head, report.hits[0]?.point);
       if (head) this.score += 50;
     }
 
@@ -577,7 +644,12 @@ export class Game {
     const dt = Math.min((now - this.lastTime) / 1000, 1 / 20);
     this.lastTime = now;
 
-    if (this.state === 'playing' || this.state === 'dead') {
+    if (this.state === 'upgrading') {
+      // As mesmas teclas de trocar de arma escolhem a carta — o dedo ja' esta' la'.
+      for (let i = 0; i < 3; i++) {
+        if (this.input.wasPressed(`Digit${i + 1}`)) { this.screens.pickUpgradeByIndex(i); break; }
+      }
+    } else if (this.state === 'playing' || this.state === 'dead') {
       this.update(dt);
     }
     this.render();
@@ -629,13 +701,20 @@ export class Game {
         player.takeDamage(hit.damage, hit.position);
       }
       this.effects.impact(hit.position, _tmp.set(0, 1, 0));
-      this.audio.impact();
+      this.audio.impact(hit.position);
     }
 
     for (const kind of this.pickups.update(dt, player.position)) this.onPickup(kind);
 
     this.effects.update(dt);
     player.updateCamera(dt, this.effects.shakeOffset);
+    this.markers.update(dt, player.camera);
+
+    // Os ouvidos vao junto com a camera; sem isso o panner posiciona tudo
+    // em relacao a origem do mundo.
+    _listenerFwd.set(0, 0, -1).applyQuaternion(player.camera.quaternion);
+    _listenerUp.set(0, 1, 0).applyQuaternion(player.camera.quaternion);
+    this.audio.setListener(player.camera.position, _listenerFwd, _listenerUp);
 
     this.viewModel.update(dt, {
       moveSpeed01: clamp(player.horizontalSpeed / PLAYER.speedSprint, 0, 1),
@@ -655,12 +734,15 @@ export class Game {
     const weapon = player.weapon;
 
     this.hud.update(dt);
-    this.hud.setHealth(player.health, player.armor);
+    this.hud.setHealth(player.health, player.armor, player.maxHealth);
     this.hud.setAmmo(
       weapon.ammoInMag, weapon.reserve, weapon.hasInfiniteReserve,
       weapon.def.name, weapon.canReload, weapon.def.magSize,
     );
-    this.hud.setWave(Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave);
+    this.hud.setWave(
+      Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave,
+      this.enemies.modifierLabel,
+    );
     this.hud.setScore(this.score, this.kills, this.combo);
     this.hud.setEdgeTurn(player.edgeTurnX, player.edgeTurnY);
     this.hud.setCrosshairSpread(

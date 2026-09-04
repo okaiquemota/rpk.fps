@@ -70,6 +70,52 @@ body.playing { cursor: none; }
 .e-t { top: 0; background: linear-gradient(to bottom, rgba(255, 157, 46, 0.4), transparent); }
 .e-b { bottom: 0; background: linear-gradient(to top, rgba(255, 157, 46, 0.4), transparent); }
 
+/* ---- marcadores no mundo (numeros de dano, vida do inimigo) ---- */
+#world-markers { position: absolute; inset: 0; overflow: hidden; }
+
+.dmg-num {
+  position: absolute; top: 0; left: 0;
+  font-size: 19px; font-weight: 700; letter-spacing: -0.5px;
+  color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 1);
+  will-change: transform, opacity; pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.dmg-num.head { color: var(--accent); font-size: 25px; }
+.dmg-num.kill { color: var(--danger); font-size: 27px; }
+
+.enemy-hp {
+  position: absolute; top: 0; left: 0;
+  width: 46px; height: 4px; border-radius: 2px;
+  background: rgba(0, 0, 0, 0.55); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  will-change: transform, opacity; pointer-events: none; overflow: hidden;
+}
+.enemy-hp-fill {
+  height: 100%; width: 100%;
+  background: var(--accent);
+  transition: width 110ms ease-out;
+}
+.enemy-hp-fill.hurt { background: var(--danger); }
+
+/* ---- de onde veio o dano ---- */
+#hit-dirs {
+  position: absolute; left: 50%; top: 50%;
+  width: 0; height: 0; pointer-events: none;
+}
+.hit-dir {
+  position: absolute; left: 0; top: 0;
+  width: 0; height: 0;
+  transition: opacity 160ms linear;
+}
+/* A seta e' desenhada bem acima da origem; girar o pai a leva pro lado certo. */
+.hit-dir::before {
+  content: ''; position: absolute;
+  left: -13px; top: -104px;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-bottom: 20px solid rgba(255, 60, 48, 0.92);
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9));
+}
+
 #damage-vignette, #low-hp-vignette {
   position: absolute; inset: 0; pointer-events: none;
 }
@@ -110,6 +156,11 @@ body.playing { cursor: none; }
 #hud-top-left { position: absolute; left: 32px; top: 26px; font-size: 13px; letter-spacing: 2px; }
 #wave-label { font-size: 20px; letter-spacing: 4px; color: var(--accent); }
 #enemies-left { margin-top: 6px; opacity: 0.6; }
+#wave-mod {
+  margin-left: 10px; padding: 2px 8px; font-size: 12px; letter-spacing: 3px;
+  background: var(--accent); color: #10120f; vertical-align: middle;
+}
+#wave-mod:empty { display: none; }
 
 #hud-top-right { position: absolute; right: 32px; top: 26px; text-align: right; font-size: 13px; letter-spacing: 2px; opacity: 0.75; }
 #score-label { font-size: 18px; opacity: 1; }
@@ -180,6 +231,36 @@ button:hover { transform: translateY(-1px); filter: brightness(1.12); }
 button:active { transform: translateY(1px); }
 button.primary { background: var(--accent); color: #10120f; font-weight: 700; }
 button.ghost { background: transparent; color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.16); margin-top: 10px; }
+
+.panel.wide { max-width: 760px; }
+
+#upgrade-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 26px 0 4px; }
+.up-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 20px 18px; cursor: pointer; text-align: left;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 2px solid var(--accent-dim);
+  transition: background 140ms, border-color 140ms, transform 140ms;
+}
+.up-card:hover, .up-card:focus-visible {
+  background: rgba(255, 157, 46, 0.1);
+  border-top-color: var(--accent);
+  transform: translateY(-3px);
+  outline: none;
+}
+.up-key {
+  font-size: 11px; letter-spacing: 2px; opacity: 0.4;
+}
+.up-name { font-size: 15px; letter-spacing: 2px; color: var(--accent); font-weight: 700; }
+.up-desc { font-size: 12px; line-height: 1.6; opacity: 0.92; color: #cfcbc5; }
+.up-stacks { font-size: 10px; letter-spacing: 1px; opacity: 0.38; margin-top: auto; }
+
+.taken { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 22px; }
+.taken .chip {
+  font-size: 10px; letter-spacing: 1px; padding: 4px 9px;
+  border: 1px solid rgba(255, 157, 46, 0.35); color: var(--accent); opacity: 0.85;
+}
 
 .controls-grid {
   display: grid; grid-template-columns: auto 1fr; gap: 9px 20px;

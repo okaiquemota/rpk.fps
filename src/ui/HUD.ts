@@ -24,6 +24,7 @@ export class HUD {
   private weaponName = $('weapon-name');
   private reloadHint = $('reload-hint');
   private waveValue = $('wave-value');
+  private waveMod = $('wave-mod');
   private enemiesValue = $('enemies-value');
   private scoreValue = $('score-value');
   private killsValue = $('kills-value');
@@ -38,16 +39,28 @@ export class HUD {
   private edgeR = document.querySelector<HTMLElement>('.e-r')!;
   private edgeT = document.querySelector<HTMLElement>('.e-t')!;
   private edgeB = document.querySelector<HTMLElement>('.e-b')!;
+  private hitDirs: { el: HTMLElement; life: number }[] = [];
 
   private slots = new Map<WeaponId, HTMLElement>();
   private last = {
     health: -1, armor: -1, mag: -1, reserve: -999, weapon: '' as string,
     wave: -1, enemies: -1, score: -1, kills: -1, combo: -1, reloadable: false, lowHp: false,
+    modifier: '' as string,
   };
   private damageTimer = 0;
   private hitmarkerTimer = 0;
 
   constructor() {
+    // Setas de "levei dano daquele lado", giradas em torno da mira.
+    const dirRoot = document.getElementById('hit-dirs');
+    for (let i = 0; i < 6; i++) {
+      const el = document.createElement('div');
+      el.className = 'hit-dir';
+      el.style.opacity = '0';
+      dirRoot?.appendChild(el);
+      this.hitDirs.push({ el, life: 0 });
+    }
+
     for (const id of WEAPON_ORDER) {
       const el = document.createElement('div');
       el.className = 'wslot locked';
@@ -60,16 +73,16 @@ export class HUD {
   show(): void { this.root.classList.remove('hidden'); }
   hide(): void { this.root.classList.add('hidden'); }
 
-  setHealth(health: number, armor: number): void {
+  setHealth(health: number, armor: number, maxHealth: number): void {
     const h = Math.ceil(health);
     if (h !== this.last.health) {
       this.last.health = h;
       this.healthValue.textContent = String(h);
-      const pct = clamp(health / PLAYER.maxHealth, 0, 1) * 100;
+      const pct = clamp(health / maxHealth, 0, 1) * 100;
       this.healthFill.style.width = `${pct}%`;
-      this.healthFill.classList.toggle('low', health <= 35);
+      const low = health <= maxHealth * 0.35 && health > 0;
+      this.healthFill.classList.toggle('low', low);
 
-      const low = health <= 35 && health > 0;
       if (low !== this.last.lowHp) {
         this.last.lowHp = low;
         this.lowHpVignette.style.opacity = low ? '1' : '0';
@@ -107,7 +120,7 @@ export class HUD {
     }
   }
 
-  setWave(wave: number, enemiesLeft: number): void {
+  setWave(wave: number, enemiesLeft: number, modifier: string): void {
     if (wave !== this.last.wave) {
       this.last.wave = wave;
       this.waveValue.textContent = String(wave);
@@ -115,6 +128,10 @@ export class HUD {
     if (enemiesLeft !== this.last.enemies) {
       this.last.enemies = enemiesLeft;
       this.enemiesValue.textContent = String(enemiesLeft);
+    }
+    if (modifier !== this.last.modifier) {
+      this.last.modifier = modifier;
+      this.waveMod.textContent = modifier;
     }
   }
 
@@ -163,6 +180,19 @@ export class HUD {
     this.edgeB.style.opacity = y > 0 ? String(y) : '0';
   }
 
+  /**
+   * Aponta de onde veio o dano.
+   * `angle` em radianos no espaco do jogador: 0 e' de frente, +PI/2 pela direita.
+   */
+  showHitDirection(angle: number): void {
+    // Reaproveita a seta mais gasta quando todas estao em uso.
+    let slot = this.hitDirs.find((d) => d.life <= 0);
+    if (!slot) slot = this.hitDirs.reduce((a, b) => (a.life <= b.life ? a : b));
+    slot.life = 1.5;
+    slot.el.style.transform = `rotate(${angle}rad)`;
+    slot.el.style.opacity = '1';
+  }
+
   flashDamage(): void {
     this.damageVignette.classList.add('on');
     this.damageTimer = 0.09;
@@ -188,6 +218,14 @@ export class HUD {
   }
 
   update(dt: number): void {
+    for (const d of this.hitDirs) {
+      if (d.life <= 0) continue;
+      d.life -= dt;
+      // Fica cheia um instante e some devagar: da' tempo de ler a direcao.
+      d.el.style.opacity = String(clamp(d.life / 0.9, 0, 1));
+      if (d.life <= 0) d.el.style.opacity = '0';
+    }
+
     if (this.damageTimer > 0) {
       this.damageTimer -= dt;
       if (this.damageTimer <= 0) this.damageVignette.classList.remove('on');
@@ -200,6 +238,9 @@ export class HUD {
     this.last.reserve = -999;
     this.last.wave = this.last.enemies = this.last.score = this.last.kills = this.last.combo = -1;
     this.last.weapon = '';
+    this.last.modifier = '';
+    this.waveMod.textContent = '';
+    for (const d of this.hitDirs) { d.life = 0; d.el.style.opacity = '0'; }
     this.killfeed.replaceChildren();
     this.toast.classList.add('hidden');
     this.damageVignette.classList.remove('on');

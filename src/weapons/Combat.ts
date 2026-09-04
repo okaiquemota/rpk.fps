@@ -8,6 +8,15 @@ import type { Level } from '../world/Level';
 import type { Player } from '../player/Player';
 import type { Weapon } from './Weapon';
 
+export interface EnemyHit {
+  enemy: Enemy;
+  /** Ponto do primeiro pellet que acertou — onde o numero de dano nasce. */
+  point: THREE.Vector3;
+  damage: number;
+  headshot: boolean;
+  killed: boolean;
+}
+
 export interface ShotReport {
   pellets: number;
   pelletsHit: number;
@@ -15,6 +24,12 @@ export interface ShotReport {
   headshots: number;
   kills: Enemy[];
   anyHit: boolean;
+  /**
+   * Um item por inimigo atingido, com o dano ja' somado.
+   * A escopeta acerta ate' nove vezes o mesmo alvo; nove numeros de dano
+   * empilhados nao dizem nada — um numero com o total diz.
+   */
+  hits: EnemyHit[];
   /** Pellets que bateram em geometria do nivel (pra som de ricochete). */
   surfaceHits: number;
 }
@@ -43,7 +58,7 @@ export class CombatSystem {
   fire(player: Player, weapon: Weapon, muzzleWorld: THREE.Vector3): ShotReport {
     const report: ShotReport = {
       pellets: weapon.def.pellets, pelletsHit: 0, totalDamage: 0,
-      headshots: 0, kills: [], anyHit: false, surfaceHits: 0,
+      headshots: 0, kills: [], anyHit: false, surfaceHits: 0, hits: [],
     };
 
     const origin = player.eyePosition;
@@ -97,7 +112,8 @@ export class CombatSystem {
         const headshot = _point.y >= hitEnemy.headMinY;
         const damage = weapon.def.damage
           * weapon.damageAt(closest)
-          * (headshot ? COMBAT.headshotMultiplier : 1);
+          * player.stats.damageMult
+          * (headshot ? COMBAT.headshotMultiplier * player.stats.headshotMult : 1);
 
         const result = hitEnemy.takeDamage(damage);
         _knock.copy(_dir).setY(0).normalize();
@@ -110,6 +126,18 @@ export class CombatSystem {
         report.anyHit = true;
         if (headshot) report.headshots++;
         if (result.killed) report.kills.push(hitEnemy);
+
+        const entry = report.hits.find((x) => x.enemy === hitEnemy);
+        if (entry) {
+          entry.damage += result.applied;
+          entry.headshot ||= headshot;
+          entry.killed ||= result.killed;
+        } else {
+          report.hits.push({
+            enemy: hitEnemy, point: _point.clone(),
+            damage: result.applied, headshot, killed: result.killed,
+          });
+        }
       } else if (closest < maxDist) {
         // Um buraco por pellet empilha 9 decais no mesmo palmo de parede e vira
         // uma mancha preta; espalhar em alguns ja' le' como padrao de chumbo.
@@ -127,16 +155,4 @@ export class CombatSystem {
     return report;
   }
 
-  /** Existe linha de visao livre entre dois pontos? (usado pela IA e pelos drops) */
-  hasLineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
-    _dir.subVectors(to, from);
-    const dist = _dir.length();
-    if (dist < 0.001) return true;
-    _dir.divideScalar(dist);
-    for (const box of this.level.colliders) {
-      const t = rayAABB(from, _dir, box, dist);
-      if (t >= 0 && t < dist) return false;
-    }
-    return true;
-  }
 }

@@ -81,6 +81,12 @@ mouse passa a ser o monitor inteiro.
 - **Ondas.** Cada onda traz mais inimigos, com mais vida e mais rápidos. Tipos
   novos entram conforme as ondas avançam: capanga (onda 1), corredor (2),
   atirador (3), brutamontes (5, e em toda onda múltipla de 5).
+- **Temperos de onda.** Cerca de uma onda em cada três vem com um modificador:
+  *horda* (muitos corredores fracos), *elite* (poucos, duros, valem mais) ou
+  *cerco* (atiradores por toda parte). Aparece no HUD ao lado do número da onda.
+- **Melhorias.** Toda onda limpa abre uma escolha entre três cartas — dano,
+  cadência, carregador, vida, colete, roubo de vida, munição por abate. Elas
+  acumulam e valem pela partida inteira; a tela final mostra o que você montou.
 - **Armas.** Você começa com a pistola (munição de reserva infinita). O fuzil
   aparece como item na arena na onda 2 e a escopeta na onda 4.
 - **Vida.** Regenera até 50 depois de 6 segundos sem tomar dano. Passar de 50
@@ -136,6 +142,12 @@ Algumas decisões que valem ser explicadas:
   parecer honesta.
 - **A arma é renderizada numa cena separada**, com câmera e FOV próprios, por
   cima do mundo com o depth buffer limpo. Sem isso ela atravessa parede.
+- **As melhorias são multiplicadores num só objeto** (`Stats`), que as armas e o
+  jogador consultam. Uma melhoria nova não toca no balanceamento, e o
+  balanceamento não precisa saber que melhorias existem.
+- **Som do mundo é posicional.** Tiro de inimigo, passo, morte e impacto passam
+  por um `PannerNode` e chegam do lado certo; o que é seu (tiro, recarga, seus
+  passos) vai direto pro master.
 - **Pools pré-alocados em tudo que é efeito.** Um tiro de escopeta gera 9
   impactos no mesmo frame; alocar nesse momento é engasgo de GC na hora errada.
 - **Faísca e fumaça são duas camadas de partículas separadas**, porque querem
@@ -155,8 +167,8 @@ Coisas que o código já está preparado pra receber:
 - [ ] Mais armas (adicionar em `WEAPON_DEFS` + um rig em `ViewModel`)
 - [ ] Granadas / dano em área
 - [ ] Inimigo que voa ou que explode ao morrer
-- [ ] Loja entre ondas pra gastar os pontos
-- [ ] Melhorias permanentes (velocidade, dano, vida)
-- [ ] Minimapa ou indicador de direção de dano
+- [ ] Melhorias raras/lendárias, e melhorias que mudam como a arma funciona
+- [ ] Chefe a cada dez ondas
+- [ ] Minimapa
 - [ ] Placar online
 - [ ] Suporte a gamepad

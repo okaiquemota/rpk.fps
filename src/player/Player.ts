@@ -5,6 +5,7 @@ import type { Input } from '../core/Input';
 import type { Level } from '../world/Level';
 import { canStandAt, moveCharacter } from '../world/Physics';
 import { Weapon } from '../weapons/Weapon';
+import { BASE_STATS, type Stats, type Upgrade } from './Stats';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from '../weapons/WeaponDefs';
 
 export interface PlayerEvents {
@@ -28,6 +29,10 @@ export class Player {
 
   health: number = PLAYER.maxHealth;
   armor = 0;
+
+  /** Multiplicadores das melhorias. As armas guardam a mesma referencia. */
+  readonly stats: Stats = { ...BASE_STATS };
+  readonly upgradesTaken = new Map<string, number>();
   alive = true;
 
   grounded = false;
@@ -58,7 +63,7 @@ export class Player {
       CAMERA.fov, window.innerWidth / window.innerHeight, CAMERA.near, CAMERA.far,
     );
     for (const id of WEAPON_ORDER) {
-      this.weapons.set(id, new Weapon(WEAPON_DEFS[id], id === 'pistol'));
+      this.weapons.set(id, new Weapon(WEAPON_DEFS[id], id === 'pistol', this.stats));
     }
     this.respawn();
   }
@@ -69,10 +74,12 @@ export class Player {
     return new THREE.Vector3(this.position.x, this.position.y + this.eyeHeight, this.position.z);
   }
   get horizontalSpeed(): number { return Math.hypot(this.velocity.x, this.velocity.z); }
+  get maxHealth(): number { return PLAYER.maxHealth + this.stats.maxHealthBonus; }
   get maxSpeedNow(): number {
-    if (this.crouching) return PLAYER.speedCrouch;
-    if (this.sprinting) return PLAYER.speedSprint;
-    return PLAYER.speedWalk;
+    const base = this.crouching ? PLAYER.speedCrouch
+      : this.sprinting ? PLAYER.speedSprint
+      : PLAYER.speedWalk;
+    return base * this.stats.moveSpeedMult;
   }
 
   forward(out = new THREE.Vector3()): THREE.Vector3 {
@@ -86,7 +93,9 @@ export class Player {
     this.velocity.set(0, 0, 0);
     this.yaw = 0;
     this.pitch = 0;
-    this.health = PLAYER.maxHealth;
+    Object.assign(this.stats, BASE_STATS);
+    this.upgradesTaken.clear();
+    this.health = this.maxHealth;
     this.armor = 0;
     this.alive = true;
     this.crouching = false;
@@ -354,7 +363,7 @@ export class Player {
 
   heal(amount: number): number {
     const before = this.health;
-    this.health = Math.min(PLAYER.maxHealth, this.health + amount);
+    this.health = Math.min(this.maxHealth, this.health + amount);
     return this.health - before;
   }
 
@@ -362,6 +371,14 @@ export class Player {
     const before = this.armor;
     this.armor = Math.min(PLAYER.maxArmor, this.armor + amount);
     return this.armor - before;
+  }
+
+  /** Aplica uma melhoria e conta o acumulo dela. */
+  takeUpgrade(upgrade: Upgrade): void {
+    upgrade.apply(this.stats);
+    this.upgradesTaken.set(upgrade.id, (this.upgradesTaken.get(upgrade.id) ?? 0) + 1);
+    // Vida maxima maior nao serve de nada se a barra nao acompanhar na hora.
+    if (upgrade.id === 'health') this.heal(30);
   }
 
   onResize(): void {

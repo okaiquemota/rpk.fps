@@ -24,6 +24,16 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
 - Efeitos visuais usam pool pré-alocado. Não aloque mesh nem material dentro
   do loop de jogo.
 
+## Onde mexer em cada coisa
+
+- Balanceamento de arma: `WEAPON_DEFS`. De inimigo: `ENEMY_DEFS`. Do resto:
+  `src/config.ts`.
+- Melhorias entre ondas: `src/player/Stats.ts`. Uma melhoria nova e' uma entrada
+  em `UPGRADES` mexendo num campo de `Stats` — quem consome ja' esta' ligado.
+- Temperos de onda (horda/elite/cerco): `MODIFIERS` em `EnemyManager`.
+- Feedback de combate em DOM (numero de dano, vida do inimigo):
+  `src/ui/WorldMarkers.ts`. Seta de direcao do dano: `HUD.showHitDirection`.
+
 ## Armadilhas conhecidas
 
 - **NUNCA mude a quantidade de luzes da cena durante o jogo.** No three, entrar
