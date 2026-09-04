@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp, damp, lerp } from '../core/math';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from './WeaponDefs';
+import type { WeaponModel } from './WeaponModels';
 
 interface Rig {
   root: THREE.Group;
@@ -13,6 +14,13 @@ const ADS_POS = new THREE.Vector3(0, -0.115, -0.46);
 /** Angulo de 3/4 no quadril; some ao mirar, quando a arma alinha com a mira. */
 const HIP_YAW = -0.16;
 const HIP_PITCH = 0.05;
+/**
+ * Os modelos 3D sao mais longos que os rigs procedurais, entao o mesmo angulo
+ * de 3/4 joga a ponta do cano pra fora da tela e a coronha na cara. Com modelo,
+ * a arma fica mais alinhada com a mira.
+ */
+const MODEL_HIP_YAW = -0.07;
+const MODEL_HIP_PITCH = 0.015;
 
 /**
  * A arma que voce ve' na tela. Fica pendurada na camera, entao vive em espaco
@@ -46,7 +54,12 @@ export class ViewModel {
    */
   private flashLight = new THREE.PointLight(0xffb457, 0, 9, 2);
 
-  constructor() {
+  /**
+   * `models` traz as armas em .glb. O que faltar continua com o rig procedural
+   * — da' pra trocar uma arma de cada vez, e quem clonar sem os arquivos joga
+   * do mesmo jeito.
+   */
+  constructor(private models: Map<WeaponId, WeaponModel> = new Map()) {
     this.group.renderOrder = 10;
     this.group.add(this.flashLight);
     // A cena da arma tem FOV proprio; a escala compensa pra ela nao ficar
@@ -68,6 +81,9 @@ export class ViewModel {
   private buildRig(id: WeaponId): Rig {
     const def = WEAPON_DEFS[id];
     const root = new THREE.Group();
+
+    const model = this.models.get(id);
+    if (model) return this.buildModelRig(id, root, model);
 
     const bodyMat = this.track(new THREE.MeshStandardMaterial({
       color: def.bodyColor, roughness: 0.45, metalness: 0.35,
@@ -228,6 +244,33 @@ export class ViewModel {
     }
   }
 
+  /**
+   * Rig com modelo 3D: so' o clarao e o ponto do cano sao nossos, o resto vem
+   * do arquivo. Mantem a mesma interface do rig procedural, entao nada mais no
+   * viewmodel precisa saber qual dos dois esta' em uso.
+   */
+  private buildModelRig(id: WeaponId, root: THREE.Group, model: WeaponModel): Rig {
+    const def = WEAPON_DEFS[id];
+    root.add(model.object);
+
+    const muzzlePoint = new THREE.Object3D();
+    muzzlePoint.position.copy(model.muzzle);
+    root.add(muzzlePoint);
+
+    const flash = new THREE.Mesh(
+      this.track(new THREE.PlaneGeometry(0.3 * def.muzzleScale, 0.3 * def.muzzleScale)),
+      this.track(new THREE.MeshBasicMaterial({
+        color: 0xffd27a, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      })),
+    );
+    flash.position.copy(model.muzzle);
+    flash.visible = false;
+    root.add(flash);
+
+    return { root, muzzlePoint, flash };
+  }
+
   setWeapon(id: WeaponId): void {
     if (id === this.current) return;
     for (const [key, rig] of this.rigs) rig.root.visible = key === id;
@@ -308,9 +351,12 @@ export class ViewModel {
       base.z + this.recoilOffset,
     );
     const hip = 1 - opts.adsAmount;
+    const usaModelo = this.models.has(this.current);
+    const hipPitch = usaModelo ? MODEL_HIP_PITCH : HIP_PITCH;
+    const hipYaw = usaModelo ? MODEL_HIP_YAW : HIP_YAW;
     rig.root.rotation.set(
-      HIP_PITCH * hip + this.recoilRot * 0.35 + this.reloadAmount * 0.75 + this.switchAmount * 0.4,
-      HIP_YAW * hip - this.swayX * 3 + this.reloadAmount * 0.3,
+      hipPitch * hip + this.recoilRot * 0.35 + this.reloadAmount * 0.75 + this.switchAmount * 0.4,
+      hipYaw * hip - this.swayX * 3 + this.reloadAmount * 0.3,
       this.swayY * 2.2 - this.reloadAmount * 0.35 + this.recoilRoll,
     );
 

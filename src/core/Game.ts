@@ -10,6 +10,7 @@ import { Player } from '../player/Player';
 import { ViewModel } from '../weapons/ViewModel';
 import { CombatSystem } from '../weapons/Combat';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from '../weapons/WeaponDefs';
+import type { WeaponModel } from '../weapons/WeaponModels';
 import { EnemyManager } from '../enemies/EnemyManager';
 import { Enemy, disposeEnemyGeometries } from '../enemies/Enemy';
 import { ENEMY_DEFS, type EnemyKind } from '../enemies/EnemyTypes';
@@ -69,7 +70,7 @@ export class Game {
   private audio = new AudioManager();
   private level: Level;
   private player: Player;
-  private viewModel = new ViewModel();
+  private viewModel: ViewModel;
   private effects: Effects;
   private projectiles = new ProjectileSystem();
   private pickups = new PickupManager();
@@ -96,7 +97,8 @@ export class Game {
   private deathTimer = 0;
   private wasInFallback = false;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, models: Map<WeaponId, WeaponModel> = new Map()) {
+    this.viewModel = new ViewModel(models);
     // ---------- renderer ----------
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

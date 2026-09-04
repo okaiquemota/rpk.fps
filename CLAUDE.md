@@ -43,6 +43,30 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
 - Feedback de combate em DOM (numero de dano, vida do inimigo):
   `src/ui/WorldMarkers.ts`. Seta de direcao do dano: `HUD.showHitDirection`.
 
+## Modelos 3D das armas
+
+`src/weapons/WeaponModels.ts` carrega os `.glb` de `assets/models/` e os entrega
+prontos ao `ViewModel`. Faltando um arquivo, aquela arma cai no rig procedural
+— o jogo nunca depende de asset pra funcionar.
+
+A escala NAO e' um fator fixo: e' derivada de um comprimento alvo em metros
+(`SPECS`), medindo a caixa da peca. O pacote nao mantem proporcao real entre as
+armas, e um fator unico deixaria umas gigantes e outras minusculas.
+
+**Orientacao: `scene.rotation.y = +PI/2`.** Os modelos do Quaternius deitam a
+arma ao longo de X com o cano pro lado POSITIVO. Com `-PI/2` a arma aponta pras
+costas do jogador — e isso NAO da' pra ver na tela: em perspectiva os dois lados
+parecem plausiveis. Se precisar reconferir, meca a caixa: com a rotacao certa, a
+maior parte do comprimento fica em Z NEGATIVO.
+
+O enquadramento de cada arma sai do `offset` em `SPECS` (X pra dentro/fora, Y
+pra cima/baixo, Z pra perto/longe). Modelos sao mais longos que os rigs
+procedurais, entao o angulo de 3/4 do quadril e' menor com eles
+(`MODEL_HIP_YAW`/`MODEL_HIP_PITCH` no `ViewModel`).
+
+Os `.glb` entram embutidos no bundle (`assetsInlineLimit` no `vite.config.ts`),
+o que mantem o build de arquivo unico sendo um arquivo so'.
+
 ## Modos
 
 `GameMode` em `Game.ts` decide o que roda: `waves` (ondas) ou `range` (campo de

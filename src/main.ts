@@ -1,4 +1,5 @@
 import { Game } from './core/Game';
+import { loadWeaponModels } from './weapons/WeaponModels';
 
 const canvas = document.getElementById('viewport') as HTMLCanvasElement | null;
 
@@ -23,7 +24,10 @@ if (!supportsWebGL()) {
     '<div><h1>WebGL indisponivel</h1><p style="opacity:.6;margin-top:12px">' +
     'Este navegador nao consegue rodar o jogo. Tente ativar a aceleracao de hardware.</p></div></div>';
 } else {
-  const game = new Game(canvas);
+  // Os modelos entram ANTES do jogo existir: assim o aquecimento de shaders
+  // cobre os materiais deles, e nada compila no meio da partida.
+  const models = await loadWeaponModels();
+  const game = new Game(canvas, models);
 
   // Gancho de depuracao: no console do navegador da' pra bisbilhotar
   // o estado do jogo (`__RPK.player`, `__RPK.enemies`, ...).
