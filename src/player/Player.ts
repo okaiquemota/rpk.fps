@@ -148,16 +148,19 @@ export class Player {
 
     this.pitch = clamp(this.pitch, -CAMERA.pitchLimit, CAMERA.pitchLimit);
 
-    // O recuo sobe rapido e desce devagar — a arma "puxa" e depois assenta.
-    this.recoilPitch = damp(this.recoilPitch, this.recoilPitchTarget, 22, dt);
-    this.recoilYaw = damp(this.recoilYaw, this.recoilYawTarget, 22, dt);
-    this.recoilPitchTarget = damp(this.recoilPitchTarget, 0, 6.5, dt);
-    this.recoilYawTarget = damp(this.recoilYawTarget, 0, 6.5, dt);
+    // O recuo sobe rapido e assenta devagar. A volta usa o ritmo da arma: uma
+    // sniper leva um tempao pra reassentar, uma submetralhadora quase nao sai.
+    const recovery = this.weapon.def.recoilRecovery;
+    this.recoilPitch = damp(this.recoilPitch, this.recoilPitchTarget, 24, dt);
+    this.recoilYaw = damp(this.recoilYaw, this.recoilYawTarget, 24, dt);
+    this.recoilPitchTarget = damp(this.recoilPitchTarget, 0, recovery, dt);
+    this.recoilYawTarget = damp(this.recoilYawTarget, 0, recovery, dt);
   }
 
+  /** `yaw` ja' vem com sinal: quem decide o lado e' o padrao da arma. */
   addRecoil(pitch: number, yaw: number): void {
     this.recoilPitchTarget += pitch;
-    this.recoilYawTarget += (Math.random() * 2 - 1) * yaw;
+    this.recoilYawTarget += yaw;
   }
 
   updateMovement(input: Input, dt: number): void {

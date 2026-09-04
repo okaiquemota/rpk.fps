@@ -623,10 +623,11 @@ export class Game {
     this.audio.shot(SHOT_SOUND[weapon.def.id]);
     if (report.surfaceHits > 0) this.audio.impact();
     this.viewModel.onFire(weapon.def.kickback);
-    player.addRecoil(
-      weapon.def.recoilPitch * (1 - player.adsAmount * 0.3),
-      weapon.def.recoilYaw,
-    );
+    // Mirar segura a arma: o mesmo padrao, com menos amplitude.
+    const kick = weapon.recoilStep();
+    const adsDamp = 1 - player.adsAmount * 0.35;
+    player.addRecoil(kick.pitch * adsDamp, kick.yaw * adsDamp);
+    this.viewModel.onRecoilSide(kick.yaw);
     this.effects.addShake(weapon.def.shakeAmount * 0.06);
 
     for (const hit of report.hits) {

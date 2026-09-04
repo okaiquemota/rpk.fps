@@ -148,6 +148,11 @@ Algumas decisões que valem ser explicadas:
 - **As melhorias são multiplicadores num só objeto** (`Stats`), que as armas e o
   jogador consultam. Uma melhoria nova não toca no balanceamento, e o
   balanceamento não precisa saber que melhorias existem.
+- **Cada tiro são quatro camadas** — estalo, corpo, grave e ferrolho — passando
+  por saturação e por um reverb de convolução com resposta de impulso gerada em
+  código. É o que separa "bip" de tiro.
+- **O padrão de recuo é determinístico**, não aleatório: dá para decorar o
+  desenho de cada arma e compensar puxando o mouse ao contrário.
 - **Som do mundo é posicional.** Tiro de inimigo, passo, morte e impacto passam
   por um `PannerNode` e chegam do lado certo; o que é seu (tiro, recarga, seus
   passos) vai direto pro master.

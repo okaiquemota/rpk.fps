@@ -40,6 +40,45 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
 - Feedback de combate em DOM (numero de dano, vida do inimigo):
   `src/ui/WorldMarkers.ts`. Seta de direcao do dano: `HUD.showHitDirection`.
 
+## Som
+
+`src/core/Audio.ts` e' uma engine pequena, nao uma lista de bipes. O que faz um
+tiro soar como tiro:
+
+- **ataque de meio milissegundo** — envelope suave vira sopro;
+- **saturacao** (`WaveShaper`), que arredonda o pico e da volume percebido;
+- **ambiente** (`ConvolverNode` com resposta de impulso gerada na mao), sem o
+  qual todo disparo parece dado dentro de um armario.
+
+Cada disparo sao quatro camadas — estalo, corpo, grave e ferrolho — descritas em
+`SHOT_PROFILES`. Mexer numa camada muda a arma sem descaracterizar o conjunto.
+
+**O filtro vem antes do envelope**, entao o `gain` de `burst()` nao e' a
+amplitude de saida: um bandpass estreito descarta quase toda a energia do ruido
+branco. Ha uma compensacao explicita por largura de banda; sem ela, subir o
+ganho cinco vezes mal mexia no volume (foi um bug real).
+
+Para MEDIR som em vez de adivinhar, `init()` aceita um `OfflineAudioContext`:
+renderize o efeito num buffer e olhe pico, ataque e envelope. Vale lembrar que o
+compressor e o waveshaper somam ~9 ms de latencia fixa a tudo — meca o ataque a
+partir do inicio do som, nao do zero, senao voce mede o pipeline.
+
+## Recuo
+
+O padrao de spray e' DETERMINISTICO (`Weapon.recoilStep()`), com so' um tico de
+aleatorio por cima: e' isso que permite decorar o desenho de uma arma e
+compensar puxando o mouse ao contrario. Os parametros por arma estao em
+`WEAPON_DEFS` (`recoilPitch`, `recoilYaw`, `recoilRamp`, `recoilSway`,
+`recoilRecovery`, `burstReset`).
+
+O recuo e' um OFFSET somado a mira, nunca uma alteracao do `pitch`/`yaw` do
+jogador — por isso ele volta sozinho ao lugar quando a rajada acaba, e quem
+compensou com o mouse termina com a mira mais baixa, como na vida real.
+
+Proporcao que funciona: subida total de 7 a 10 graus por carregador e abertura
+lateral parecida. A primeira versao subia 20 graus e abria 1, o que e' uma linha
+vertical — nao um desenho que se aprende.
+
 ## Armadilhas conhecidas
 
 - **NUNCA mude a quantidade de luzes da cena durante o jogo.** No three, entrar

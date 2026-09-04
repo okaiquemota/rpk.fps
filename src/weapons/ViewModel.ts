@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { damp, lerp } from '../core/math';
+import { clamp, damp, lerp } from '../core/math';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from './WeaponDefs';
 
 interface Rig {
@@ -35,6 +35,7 @@ export class ViewModel {
   private reloadAmount = 0;
   private switchAmount = 0;
   private flashTimer = 0;
+  private recoilRoll = 0;
 
   private disposables: (THREE.BufferGeometry | THREE.Material)[] = [];
 
@@ -245,6 +246,11 @@ export class ViewModel {
     this.flashTimer = 0.055;
   }
 
+  /** Inclina a arma pro lado pra onde o padrao esta' puxando. */
+  onRecoilSide(yaw: number): void {
+    this.recoilRoll = clamp(this.recoilRoll + yaw * 9, -0.28, 0.28);
+  }
+
   onReloadStart(): void { this.reloadAmount = 1; }
 
   update(
@@ -267,6 +273,7 @@ export class ViewModel {
     // recuo volta pra posicao
     this.recoilOffset = damp(this.recoilOffset, 0, 14, dt);
     this.recoilRot = damp(this.recoilRot, 0, 12, dt);
+    this.recoilRoll = damp(this.recoilRoll, 0, 9, dt);
 
     // balanco de caminhada (some ao mirar)
     if (opts.grounded && opts.moveSpeed01 > 0.05) {
@@ -304,7 +311,7 @@ export class ViewModel {
     rig.root.rotation.set(
       HIP_PITCH * hip + this.recoilRot * 0.35 + this.reloadAmount * 0.75 + this.switchAmount * 0.4,
       HIP_YAW * hip - this.swayX * 3 + this.reloadAmount * 0.3,
-      this.swayY * 2.2 - this.reloadAmount * 0.35,
+      this.swayY * 2.2 - this.reloadAmount * 0.35 + this.recoilRoll,
     );
 
     // clarao do cano
