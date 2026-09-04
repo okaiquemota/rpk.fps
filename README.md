@@ -22,6 +22,19 @@ npm run preview    # serve o dist/ (útil pra testar o build)
 npm run typecheck  # só o tsc, sem gerar nada
 ```
 
+## Publicando
+
+O repositório já traz um workflow de GitHub Pages
+(`.github/workflows/pages.yml`). Para ligar:
+
+1. **Settings → Pages → Source: "GitHub Actions"**
+2. Faça merge na `main` (ou rode o workflow à mão pela aba **Actions**)
+3. O jogo sai em `https://<usuario>.github.io/rpk.fps/`
+
+Servido assim, a página fica no topo do navegador — sem iframe no caminho — e a
+captura do mouse funciona normalmente. É a diferença entre jogar com mira de FPS
+de verdade e jogar no modo de mira solta.
+
 ## Controles
 
 | Tecla | Ação |

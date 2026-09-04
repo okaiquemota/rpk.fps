@@ -1,0 +1,56 @@
+# Publica o jogo no GitHub Pages.
+#
+# Antes do primeiro deploy, ligue o Pages em:
+#   Settings > Pages > Build and deployment > Source: "GitHub Actions"
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Permite publicar manualmente a partir de qualquer branch, pela aba Actions.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Um deploy por vez; se chegar outro, o que estiver na fila cede a vez.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # `build` roda o typecheck antes do bundle: um erro de tipo derruba o deploy.
+      - run: npm run build
+
+      # O arquivo unico vai junto, pra quem quiser baixar e jogar sem servidor.
+      - run: node scripts/build-single.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
