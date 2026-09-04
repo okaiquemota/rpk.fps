@@ -75,9 +75,16 @@ O recuo e' um OFFSET somado a mira, nunca uma alteracao do `pitch`/`yaw` do
 jogador — por isso ele volta sozinho ao lugar quando a rajada acaba, e quem
 compensou com o mouse termina com a mira mais baixa, como na vida real.
 
-Proporcao que funciona: subida total de 7 a 10 graus por carregador e abertura
-lateral parecida. A primeira versao subia 20 graus e abria 1, o que e' uma linha
-vertical — nao um desenho que se aprende.
+Proporcao: a subida total por carregador e a abertura lateral andam juntas.
+Hoje o jogo esta' na faixa dura — 12 a 22 graus, conforme a arma — depois de uma
+versao mais leve em 8 graus. O que NAO pode mudar e' a proporcao entre os dois
+eixos: a primeira versao de todas subia 20 graus e abria 1, o que e' uma linha
+vertical, nao um desenho que se aprende.
+
+Se for preciso afrouxar de novo, mexa em `recoilPitch` e `recoilYaw` juntos, na
+mesma razao, e em `recoilRecovery` (maior = reassenta mais rapido). O teste de
+padrao em `scratchpad/recoil.mjs` desenha o rastro de cada arma em escala real —
+rode antes e depois, e' o jeito de ver o efeito sem jogar.
 
 ## Armadilhas conhecidas
 
