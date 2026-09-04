@@ -28,37 +28,65 @@
     <div id="damage-vignette"></div>
     <div id="low-hp-vignette"></div>
 
-    <div id="hud-bottom-left">
-      <div id="health-row">
-        <span class="glyph">&#10010;</span>
-        <span id="health-value">100</span>
+    <!-- canto superior esquerdo: minimapa -->
+    <div id="minimap-slot"><div id="minimap-label">ARENA</div></div>
+
+    <!-- topo centro: placar e bussola -->
+    <div id="hud-top-center">
+      <div id="scoreboard">
+        <span class="team-tag bl">BL</span>
+        <span class="team-score" id="score-left">0</span>
+        <span id="round-timer">--:--</span>
+        <span class="team-score" id="score-right">0</span>
+        <span class="team-tag gr">GR</span>
       </div>
-      <div id="health-bar"><div id="health-fill"></div></div>
-      <div id="armor-bar"><div id="armor-fill"></div></div>
+      <div id="wave-line">ONDA <span id="wave-value">1</span><span id="wave-mod"></span></div>
+      <div id="compass-slot"></div>
     </div>
 
-    <div id="hud-bottom-right">
-      <div id="ammo-row">
-        <span id="ammo-mag">12</span><span id="ammo-sep">/</span><span id="ammo-reserve">&#8734;</span>
+    <!-- canto superior direito: killfeed e pontuacao -->
+    <div id="hud-top-right">
+      <div id="score-label">PONTOS <span id="score-value">0</span></div>
+      <div id="kills-label">ABATES <span id="kills-value">0</span></div>
+      <div id="enemies-left">INIMIGOS <span id="enemies-value">0</span></div>
+      <div id="combo-label" class="hidden">x<span id="combo-value">1</span></div>
+    </div>
+    <div id="killfeed"></div>
+
+    <!-- canto inferior esquerdo: patente, colete e vida -->
+    <div id="player-panel">
+      <div id="rank-badge"><span class="star">&#9733;</span> ACE</div>
+      <div class="stat-row">
+        <span class="stat-key">AC</span>
+        <div class="stat-bar"><div id="armor-fill"></div></div>
+        <span class="stat-num" id="armor-value">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">HP</span>
+        <div class="stat-bar"><div id="health-fill"></div></div>
+        <span class="stat-num" id="health-value">100</span>
+      </div>
+    </div>
+
+    <!-- canto inferior direito: municao -->
+    <div id="ammo-panel">
+      <img id="weapon-icon" alt="" />
+      <div id="ammo-block">
+        <div id="ammo-caption">Municao</div>
+        <div id="ammo-row">
+          <span id="ammo-mag">12</span><span id="ammo-sep">/</span><span id="ammo-reserve">&#8734;</span>
+        </div>
       </div>
       <div id="weapon-name">PISTOLA</div>
       <div id="reload-hint" class="hidden">R &mdash; RECARREGAR</div>
     </div>
 
-    <div id="hud-top-left">
-      <div id="wave-label">ONDA <span id="wave-value">1</span><span id="wave-mod"></span></div>
-      <div id="enemies-left">INIMIGOS: <span id="enemies-value">0</span></div>
-    </div>
-
-    <div id="hud-top-right">
-      <div id="score-label">PONTOS <span id="score-value">0</span></div>
-      <div id="kills-label">ABATES <span id="kills-value">0</span></div>
-      <div id="combo-label" class="hidden">x<span id="combo-value">1</span></div>
-    </div>
-
     <div id="weapon-wheel"></div>
+
+    <!-- centro inferior: aviso de abate -->
+    <div id="kill-banner"></div>
+
     <div id="center-toast" class="hidden"></div>
-    <div id="killfeed"></div>
   </div>
 
   <!-- ================= TELAS ================= -->

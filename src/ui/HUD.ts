@@ -1,6 +1,7 @@
 import { clamp } from '../core/math';
 import { PLAYER } from '../config';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from '../weapons/WeaponDefs';
+import { weaponIcon } from './weaponIcons';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -19,12 +20,20 @@ export class HUD {
   private healthValue = $('health-value');
   private healthFill = $('health-fill');
   private armorFill = $('armor-fill');
+  private armorValue = $('armor-value');
   private ammoMag = $('ammo-mag');
   private ammoReserve = $('ammo-reserve');
   private weaponName = $('weapon-name');
   private reloadHint = $('reload-hint');
   private waveValue = $('wave-value');
   private waveMod = $('wave-mod');
+  private weaponIconEl = $<HTMLImageElement>('weapon-icon');
+  private killBanner = $('kill-banner');
+  private scoreboard = $('scoreboard');
+  private waveLine = $('wave-line');
+  private scoreLeft = $('score-left');
+  private scoreRight = $('score-right');
+  private roundTimer = $('round-timer');
   private enemiesValue = $('enemies-value');
   private scoreValue = $('score-value');
   private killsValue = $('kills-value');
@@ -46,6 +55,7 @@ export class HUD {
     health: -1, armor: -1, mag: -1, reserve: -999, weapon: '' as string,
     wave: -1, enemies: -1, score: -1, kills: -1, combo: -1, reloadable: false, lowHp: false,
     modifier: '' as string,
+    weaponId: '' as string,
   };
   private damageTimer = 0;
   private hitmarkerTimer = 0;
@@ -92,12 +102,13 @@ export class HUD {
     if (a !== this.last.armor) {
       this.last.armor = a;
       this.armorFill.style.width = `${clamp(armor / PLAYER.maxArmor, 0, 1) * 100}%`;
+      this.armorValue.textContent = String(a);
     }
   }
 
   setAmmo(
     mag: number, reserve: number, infinite: boolean,
-    weaponName: string, canReload: boolean, magSize: number,
+    weaponName: string, canReload: boolean, magSize: number, weaponId: WeaponId,
   ): void {
     if (mag !== this.last.mag) {
       this.last.mag = mag;
@@ -112,6 +123,10 @@ export class HUD {
     if (weaponName !== this.last.weapon) {
       this.last.weapon = weaponName;
       this.weaponName.textContent = weaponName;
+    }
+    if (weaponId !== this.last.weaponId) {
+      this.last.weaponId = weaponId;
+      this.weaponIconEl.src = weaponIcon(weaponId);
     }
     const showHint = canReload && mag <= Math.max(1, Math.floor(magSize * 0.25));
     if (showHint !== this.last.reloadable) {
@@ -198,14 +213,60 @@ export class HUD {
     this.damageTimer = 0.09;
   }
 
-  addKillfeed(text: string, headshot: boolean): void {
+  addKillfeed(victim: string, headshot: boolean, weapon: WeaponId): void {
     const el = document.createElement('div');
     el.className = headshot ? 'kf head' : 'kf';
-    el.textContent = headshot ? `${text}  ☠` : text;
+
+    const icon = document.createElement('img');
+    icon.src = weaponIcon(weapon);
+    icon.alt = '';
+    const name = document.createElement('span');
+    name.className = 'victim';
+    name.textContent = headshot ? `${victim} ☠` : victim;
+    el.append(icon, name);
+
     this.killfeed.appendChild(el);
     // O CSS ja' faz o fade; so' limpamos o no' depois.
     setTimeout(() => el.remove(), 2700);
     while (this.killfeed.childElementCount > 6) this.killfeed.firstElementChild?.remove();
+  }
+
+  /** Aviso central de abate, no estilo "voce eliminou X". */
+  showKillBanner(victim: string, headshot: boolean): void {
+    this.killBanner.replaceChildren();
+
+    const verb = document.createElement('span');
+    verb.className = 'verb';
+    verb.textContent = 'ELIMINOU';
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = victim;
+    this.killBanner.append(verb, who);
+
+    if (headshot) {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = 'HEADSHOT';
+      this.killBanner.appendChild(tag);
+    }
+
+    this.killBanner.classList.remove('on');
+    void this.killBanner.offsetWidth; // reinicia a animacao
+    this.killBanner.classList.add('on');
+  }
+
+  /**
+   * Placar de equipes no topo. Passar `null` esconde o placar e mostra a linha
+   * da onda — os dois modos usam o mesmo espaco.
+   */
+  setTeamScore(left: number | null, right = 0, timer = ''): void {
+    const teamMode = left !== null;
+    this.scoreboard.classList.toggle('hidden', !teamMode);
+    this.waveLine.classList.toggle('hidden', teamMode);
+    if (!teamMode) return;
+    this.scoreLeft.textContent = String(left);
+    this.scoreRight.textContent = String(right);
+    this.roundTimer.textContent = timer;
   }
 
   showToast(main: string, sub = ''): void {
@@ -242,6 +303,7 @@ export class HUD {
     this.waveMod.textContent = '';
     for (const d of this.hitDirs) { d.life = 0; d.el.style.opacity = '0'; }
     this.killfeed.replaceChildren();
+    this.killBanner.classList.remove('on');
     this.toast.classList.add('hidden');
     this.damageVignette.classList.remove('on');
     this.lowHpVignette.style.opacity = '0';

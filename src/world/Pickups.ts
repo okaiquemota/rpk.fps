@@ -66,6 +66,11 @@ export class PickupManager {
     });
   }
 
+  /** Posicoes dos itens no chao — o minimapa marca cada uma. */
+  get positions(): THREE.Vector3[] {
+    return this.items.map((i) => i.position);
+  }
+
   /** Move/anima os itens e devolve os que o jogador encostou. */
   update(dt: number, playerPosition: THREE.Vector3): PickupKind[] {
     const collected: PickupKind[] = [];

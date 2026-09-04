@@ -17,6 +17,8 @@ import { ProjectileSystem } from '../enemies/Projectile';
 import { Effects } from '../fx/Effects';
 import { HUD } from '../ui/HUD';
 import { WorldMarkers } from '../ui/WorldMarkers';
+import { Minimap } from '../ui/Minimap';
+import { Compass } from '../ui/Compass';
 import { Screens, type Settings } from '../ui/Screens';
 import { rollUpgrades, UPGRADES, type Upgrade } from '../player/Stats';
 
@@ -65,6 +67,8 @@ export class Game {
   private combat: CombatSystem;
   private hud = new HUD();
   private markers = new WorldMarkers();
+  private minimap: Minimap;
+  private compass = new Compass();
   private screens = new Screens();
 
   private state: GameState = 'menu';
@@ -151,6 +155,7 @@ export class Game {
     this.scene.add(this.enemies.group);
 
     this.combat = new CombatSystem(this.level, this.enemies, this.effects);
+    this.minimap = new Minimap(this.level);
 
     // ---------- camera da arma ----------
     this.viewCamera = new THREE.PerspectiveCamera(
@@ -629,7 +634,8 @@ export class Game {
 
     for (const enemy of report.kills) {
       this.enemies.killEnemy(enemy);
-      this.hud.addKillfeed(enemy.def.name, report.headshots > 0);
+      this.hud.addKillfeed(enemy.def.name, report.headshots > 0, weapon.def.id);
+      this.hud.showKillBanner(enemy.def.name, report.headshots > 0);
     }
   }
 
@@ -709,6 +715,8 @@ export class Game {
     this.effects.update(dt);
     player.updateCamera(dt, this.effects.shakeOffset);
     this.markers.update(dt, player.camera);
+    this.minimap.update(player.position, player.yaw, this.enemies.enemies, this.pickups.positions);
+    this.compass.update(player.yaw);
 
     // Os ouvidos vao junto com a camera; sem isso o panner posiciona tudo
     // em relacao a origem do mundo.
@@ -737,8 +745,9 @@ export class Game {
     this.hud.setHealth(player.health, player.armor, player.maxHealth);
     this.hud.setAmmo(
       weapon.ammoInMag, weapon.reserve, weapon.hasInfiniteReserve,
-      weapon.def.name, weapon.canReload, weapon.def.magSize,
+      weapon.def.name, weapon.canReload, weapon.magSize, weapon.def.id,
     );
+    this.hud.setTeamScore(null);
     this.hud.setWave(
       Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave,
       this.enemies.modifierLabel,
@@ -771,6 +780,8 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.player.onResize();
+    this.minimap.onResize();
+    this.compass.onResize();
     this.viewCamera.aspect = window.innerWidth / window.innerHeight;
     this.viewCamera.updateProjectionMatrix();
   };
