@@ -181,6 +181,14 @@ Algumas decisões que valem ser explicadas:
 Durante o jogo, `window.__RPK` expõe a instância do `Game` — dá pra bisbilhotar
 `__RPK.player`, `__RPK.enemies.enemies`, etc. no console do navegador.
 
+## Créditos
+
+Modelos 3D das armas: **Ultimate Guns Pack by Quaternius via Poly Pizza** (CC0).
+Detalhes em [`CREDITS.md`](CREDITS.md).
+
+Todo o resto é gerado por código — texturas em canvas 2D, som em WebAudio,
+geometria em `BoxGeometry`.
+
 ## Ideias pro próximo fim de semana
 
 Coisas que o código já está preparado pra receber:

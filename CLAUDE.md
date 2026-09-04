@@ -19,8 +19,11 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
   monoespaçada e acento fica desalinhado em algumas fontes.
 - Números de balanceamento vão em `src/config.ts`, `WEAPON_DEFS` ou
   `ENEMY_DEFS`. Não espalhe constante mágica no meio da lógica.
-- Nada de asset externo. Textura é canvas 2D, som é WebAudio, modelo é
-  `BoxGeometry`. Se precisar de algo novo, gere por código.
+- Quase nada de asset externo. Textura é canvas 2D, som é WebAudio, geometria
+  é `BoxGeometry`. A única exceção são os modelos `.glb` das armas em
+  `assets/models/` (ver `CREDITS.md`) — e mesmo eles são **opcionais**: faltando
+  o arquivo, a arma cai no modelo procedural. Não introduza dependência de asset
+  que quebre o jogo se o arquivo não existir.
 - Efeitos visuais usam pool pré-alocado. Não aloque mesh nem material dentro
   do loop de jogo.
 
