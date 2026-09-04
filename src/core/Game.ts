@@ -255,14 +255,18 @@ export class Game {
     else this.requestFullscreen();
   }
 
-  /** Explica o modo de mira solta, ja' contando o que o jogador pode fazer. */
+  /**
+   * Explica o modo de mira solta.
+   *
+   * De proposito, nao afirma a causa: `featurePolicy.allowsFeature('pointer-lock')`
+   * responde `false` ate' em pagina normal onde a captura funciona, entao usar
+   * isso pra escolher a mensagem so' produz diagnostico errado. Dizemos o que
+   * fazer, que serve nos dois casos.
+   */
   private announceFallback(): void {
-    const blocked = Input.pointerLockAllowed() === false;
     this.hud.showToast(
       'MOUSE SOLTO',
-      blocked
-        ? 'Esta pagina nao pode capturar o cursor. Tecle F para tela cheia, empurre o mouse na borda para girar, ou use as setas'
-        : 'Nao consegui capturar o cursor agora. Clique na tela para tentar de novo, ou tecle F para tela cheia',
+      'Nao consegui capturar o cursor. Clique na tela ou tecle F para tela cheia e tentar de novo — enquanto isso, empurre o mouse na borda para girar',
     );
   }
 

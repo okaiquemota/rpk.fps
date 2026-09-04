@@ -185,19 +185,6 @@ export class Input {
     }
   }
 
-  /** O navegador permite pointer lock aqui? `null` = nao da' pra saber. */
-  static pointerLockAllowed(): boolean | null {
-    const policy = (document as unknown as {
-      featurePolicy?: { allowsFeature(f: string): boolean };
-      permissionsPolicy?: { allowsFeature(f: string): boolean };
-    });
-    const api = policy.permissionsPolicy ?? policy.featurePolicy;
-    try {
-      return api ? api.allowsFeature('pointer-lock') : null;
-    } catch {
-      return null;
-    }
-  }
 
   releaseLock(): void {
     if (this.locked) document.exitPointerLock();
