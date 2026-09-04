@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { randRange } from '../core/math';
 
-export type PickupKind = 'health' | 'armor' | 'ammo' | 'weapon-rifle' | 'weapon-shotgun';
+import { WEAPON_ORDER, type WeaponId } from '../weapons/WeaponDefs';
+
+export type PickupKind = 'health' | 'armor' | 'ammo' | `weapon-${WeaponId}`;
 
 interface Pickup {
   kind: PickupKind;
@@ -11,13 +13,27 @@ interface Pickup {
   bobOffset: number;
 }
 
-const CONFIG: Record<PickupKind, { color: number; size: [number, number, number]; life: number }> = {
+interface PickupSpec { color: number; size: [number, number, number]; life: number }
+
+const CONFIG = {
   health: { color: 0x4ade80, size: [0.34, 0.34, 0.34], life: 40 },
   armor: { color: 0x58a6ff, size: [0.34, 0.4, 0.2], life: 40 },
   ammo: { color: 0xffb347, size: [0.4, 0.24, 0.3], life: 35 },
-  'weapon-rifle': { color: 0x9be36b, size: [0.16, 0.16, 0.7], life: 0 },
-  'weapon-shotgun': { color: 0xff8b5e, size: [0.18, 0.2, 0.75], life: 0 },
+} as Record<PickupKind, PickupSpec>;
+
+// Toda arma ganha o seu item automaticamente: adicionar uma em WEAPON_DEFS nao
+// exige lembrar de vir aqui tambem.
+const WEAPON_PICKUP_COLORS: Record<WeaponId, number> = {
+  pistol: 0xd7d2c8, deagle: 0xc9a227, smg: 0x9fd0ff,
+  rifle: 0x9be36b, shotgun: 0xff8b5e, sniper: 0xc98bff,
 };
+for (const id of WEAPON_ORDER) {
+  CONFIG[`weapon-${id}`] = {
+    color: WEAPON_PICKUP_COLORS[id],
+    size: [0.16, 0.18, 0.72],
+    life: 0,
+  };
+}
 
 const PICKUP_RADIUS = 1.15;
 

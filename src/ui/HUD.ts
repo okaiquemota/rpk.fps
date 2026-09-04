@@ -34,6 +34,8 @@ export class HUD {
   private scoreLeft = $('score-left');
   private scoreRight = $('score-right');
   private roundTimer = $('round-timer');
+  private scope = $('scope');
+  private scopeOn = false;
   private enemiesValue = $('enemies-value');
   private scoreValue = $('score-value');
   private killsValue = $('kills-value');
@@ -173,6 +175,14 @@ export class HUD {
     }
   }
 
+  /** Liga a mira telescopica e esconde a mira comum. */
+  setScope(on: boolean): void {
+    if (on === this.scopeOn) return;
+    this.scopeOn = on;
+    this.scope.classList.toggle('hidden', !on);
+    this.crosshair.style.display = on ? 'none' : '';
+  }
+
   /** `spread` em radianos vira abertura da mira em pixels. */
   setCrosshairSpread(spread: number, ads: number): void {
     const px = clamp(spread * 620, 2, 34);
@@ -302,6 +312,7 @@ export class HUD {
     this.last.modifier = '';
     this.waveMod.textContent = '';
     for (const d of this.hitDirs) { d.life = 0; d.el.style.opacity = '0'; }
+    this.setScope(false);
     this.killfeed.replaceChildren();
     this.killBanner.classList.remove('on');
     this.toast.classList.add('hidden');

@@ -155,7 +155,11 @@ export class AudioManager {
 
   // ---------------- efeitos do jogo ----------------
 
-  shot(kind: 'pistol' | 'rifle' | 'shotgun'): void {
+  /**
+   * Timbre por familia, nao por arma: o que precisa ser distinguivel de ouvido
+   * e' "estao usando escopeta" ou "e' uma sniper", nao qual modelo exato.
+   */
+  shot(kind: 'pistol' | 'rifle' | 'shotgun' | 'heavy' | 'sniper'): void {
     switch (kind) {
       case 'pistol':
         this.noise(0.13, 0.5, 'bandpass', randRange(1500, 2000), 0.8);
@@ -168,6 +172,17 @@ export class AudioManager {
       case 'shotgun':
         this.noise(0.3, 0.65, 'lowpass', 1400, 0.6);
         this.tone(180, 40, 0.24, 0.42, 'square');
+        break;
+      case 'heavy':
+        this.noise(0.2, 0.6, 'bandpass', randRange(700, 1000), 0.7);
+        this.tone(230, 50, 0.17, 0.44, 'square');
+        break;
+      case 'sniper':
+        // Estalo seco na frente, cauda longa atras: e' o que faz o tiro de
+        // sniper soar "grande" mesmo saindo de um oscilador simples.
+        this.noise(0.09, 0.7, 'highpass', 1800, 0.8);
+        this.noise(0.7, 0.3, 'lowpass', 500, 0.5);
+        this.tone(320, 45, 0.35, 0.5, 'sawtooth');
         break;
     }
   }

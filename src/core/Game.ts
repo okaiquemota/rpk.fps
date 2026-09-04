@@ -43,6 +43,12 @@ const MODIFIER_HINTS: Record<string, string> = {
   CERCO: 'Atiradores por toda parte — use as coberturas',
 };
 
+/** Que timbre cada arma usa. */
+const SHOT_SOUND: Record<WeaponId, 'pistol' | 'rifle' | 'shotgun' | 'heavy' | 'sniper'> = {
+  pistol: 'pistol', deagle: 'heavy', smg: 'rifle',
+  rifle: 'rifle', shotgun: 'shotgun', sniper: 'sniper',
+};
+
 const PICKUP_KINDS: PickupKind[] = ['health', 'armor', 'ammo', 'weapon-rifle', 'weapon-shotgun'];
 
 export class Game {
@@ -406,15 +412,19 @@ export class Game {
       mod ? MODIFIER_HINTS[mod] ?? '' : this.waveSubtitle(index),
     );
 
-    // Armas novas chegam como item no chao, perto do centro.
-    if (index === 2) this.dropWeapon('weapon-rifle');
-    if (index === 4) this.dropWeapon('weapon-shotgun');
+    // Armas novas chegam como item no chao, perto do centro. Quem manda e' o
+    // `unlockWave` de cada arma — nao ha lista repetida aqui.
+    for (const id of WEAPON_ORDER) {
+      const def = WEAPON_DEFS[id];
+      if (def.unlockWave === index && !this.player.weapons.get(id)!.unlocked) {
+        this.dropWeapon(`weapon-${id}`);
+      }
+    }
   }
 
   private waveSubtitle(index: number): string {
-    if (index === 2) return 'Um fuzil apareceu na arena';
-    if (index === 3) return 'Atiradores entraram em campo';
-    if (index === 4) return 'Uma escopeta apareceu na arena';
+    const arma = WEAPON_ORDER.find((id) => WEAPON_DEFS[id].unlockWave === index);
+    if (arma) return `${WEAPON_DEFS[arma].name} apareceu na arena`;
     if (index === 5) return 'Cuidado: brutamontes';
     if (index % 5 === 0) return 'Brutamontes a caminho';
     return '';
@@ -511,10 +521,11 @@ export class Game {
         }
         break;
       }
-      case 'weapon-rifle':
-      case 'weapon-shotgun': {
-        const id: WeaponId = kind === 'weapon-rifle' ? 'rifle' : 'shotgun';
-        const w = this.player.weapons.get(id)!;
+      default: {
+        // `weapon-<id>`: pegar a arma no chao desbloqueia e ja' troca pra ela.
+        const id = kind.slice('weapon-'.length) as WeaponId;
+        const w = this.player.weapons.get(id);
+        if (!w) break;
         if (!w.unlocked) {
           w.unlocked = true;
           this.player.switchWeapon(id);
@@ -609,7 +620,7 @@ export class Game {
       .addScaledVector(_camUp, -0.1);
     this.effects.ejectShell(_ejectAt, _camRight, _camUp);
 
-    this.audio.shot(weapon.def.id);
+    this.audio.shot(SHOT_SOUND[weapon.def.id]);
     if (report.surfaceHits > 0) this.audio.impact();
     this.viewModel.onFire(weapon.def.kickback);
     player.addRecoil(
@@ -724,7 +735,12 @@ export class Game {
     _listenerUp.set(0, 1, 0).applyQuaternion(player.camera.quaternion);
     this.audio.setListener(player.camera.position, _listenerFwd, _listenerUp);
 
+    // A luneta so' entra depois de metade da mirada, pra transicao nao piscar.
+    const scoped = player.weapon.def.scoped && player.adsAmount > 0.55;
+    this.hud.setScope(scoped);
+
     this.viewModel.update(dt, {
+      scopedOut: scoped,
       moveSpeed01: clamp(player.horizontalSpeed / PLAYER.speedSprint, 0, 1),
       grounded: player.grounded,
       adsAmount: player.adsAmount,

@@ -28,6 +28,12 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
 
 - Balanceamento de arma: `WEAPON_DEFS`. De inimigo: `ENEMY_DEFS`. Do resto:
   `src/config.ts`.
+- Arma nova: entrada em `WEAPON_DEFS` (o item no chao e o desbloqueio saem do
+  `unlockWave` sozinhos), um `case` no `buildRig` do `ViewModel`, uma silhueta
+  em `weaponIcons.ts` e o timbre em `SHOT_SOUND` (`Game.ts`). Inclua o rig novo
+  no aquecimento — `setVisibleForWarmup` ja' mostra todos, entao basta existir.
+- HUD: `index.html` tem o markup, `src/ui/HUD.ts` os setters. Minimapa e bussola
+  sao canvas proprios (`Minimap.ts`, `Compass.ts`).
 - Melhorias entre ondas: `src/player/Stats.ts`. Uma melhoria nova e' uma entrada
   em `UPGRADES` mexendo num campo de `Stats` — quem consome ja' esta' ligado.
 - Temperos de onda (horda/elite/cerco): `MODIFIERS` em `EnemyManager`.

@@ -41,6 +41,33 @@ function draw(id: WeaponId): string {
       box(90, 10, 4, 5);
       break;
 
+    case 'deagle':
+      box(34, 13, 48, 11);   // corpo robusto
+      box(76, 15, 26, 6);    // cano
+      box(40, 23, 13, 19);   // punho
+      box(50, 23, 15, 4);    // guarda-mato
+      box(46, 9, 26, 3);     // ventilacao do ferrolho
+      break;
+
+    case 'smg':
+      box(30, 15, 56, 9);    // corpo curto
+      box(80, 17, 18, 5);    // cano
+      box(46, 24, 11, 17);   // punho
+      box(60, 24, 9, 15);    // carregador
+      box(18, 17, 13, 5);    // coronha retratil
+      break;
+
+    case 'sniper':
+      box(18, 17, 84, 8);    // corpo comprido
+      box(98, 19, 28, 4);    // cano fino
+      box(6, 17, 13, 9);     // coronha
+      box(44, 25, 11, 15);   // punho
+      box(52, 8, 34, 7);     // luneta
+      box(58, 15, 4, 3);     // suportes
+      box(78, 15, 4, 3);
+      box(96, 25, 3, 9);     // bipe
+      break;
+
     case 'shotgun':
       box(22, 15, 74, 10);   // corpo
       box(92, 16, 32, 6);    // cano

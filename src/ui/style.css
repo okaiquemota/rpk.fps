@@ -216,6 +216,27 @@ body.playing { cursor: none; }
 }
 .enemy-hp-fill.hurt { background: var(--danger); }
 
+/* ---- luneta da sniper ---- */
+#scope { position: absolute; inset: 0; pointer-events: none; }
+/* O buraco da luneta e' um gradiente radial: transparente no meio, opaco fora.
+   Em vh pra acompanhar a altura da tela, como faz a mira de verdade. */
+.scope-mask {
+  position: absolute; inset: 0;
+  background: radial-gradient(
+    circle at center,
+    transparent 0 33vh,
+    rgba(0, 0, 0, 0.55) 33vh 34vh,
+    rgba(3, 4, 6, 0.985) 34.5vh
+  );
+}
+.scope-line { position: absolute; background: rgba(0, 0, 0, 0.85); }
+.scope-line.v { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+.scope-line.h { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+.scope-dot {
+  position: absolute; left: 50%; top: 50%; width: 4px; height: 4px;
+  transform: translate(-50%, -50%); background: #12140f; border-radius: 50%;
+}
+
 /* ---- de onde veio o dano ---- */
 #hit-dirs {
   position: absolute; left: 50%; top: 50%;

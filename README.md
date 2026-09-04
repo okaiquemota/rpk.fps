@@ -51,7 +51,7 @@ de verdade e jogar no modo de mira solta.
 | Botão esquerdo | Atirar |
 | Botão direito | Mirar (ADS) |
 | `R` | Recarregar |
-| `1` `2` `3` / scroll | Trocar de arma |
+| `1` a `6` / scroll | Trocar de arma |
 | Setas | Olhar (alternativa ao mouse) |
 
 | `Esc` | Pausar |
@@ -87,8 +87,11 @@ mouse passa a ser o monitor inteiro.
 - **Melhorias.** Toda onda limpa abre uma escolha entre três cartas — dano,
   cadência, carregador, vida, colete, roubo de vida, munição por abate. Elas
   acumulam e valem pela partida inteira; a tela final mostra o que você montou.
-- **Armas.** Você começa com a pistola (munição de reserva infinita). O fuzil
-  aparece como item na arena na onda 2 e a escopeta na onda 4.
+- **Armas.** Seis, e cada uma aparece como item na arena numa onda:
+  pistola (desde o início), fuzil (2), submetralhadora (3), escopeta (4),
+  Desert Eagle (6) e sniper (8). A sniper tem luneta de verdade — mirar troca a
+  tela pela mira telescópica, e sem mirar ela é quase inútil, de propósito.
+  Quem manda na hora de aparecer é o campo `unlockWave` de cada arma.
 - **Vida.** Regenera até 50 depois de 6 segundos sem tomar dano. Passar de 50
   exige kit de vida — que os inimigos dropam e que aparece entre as ondas.
 - **Pontos.** Cada abate vale os pontos do tipo × um multiplicador de combo que

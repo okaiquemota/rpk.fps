@@ -150,10 +150,53 @@ export class ViewModel {
       const pump = new THREE.Mesh(this.track(new THREE.BoxGeometry(bw * 1.1, 0.07, 0.14)), gripMat);
       pump.position.set(0, -bh * 0.4, -bd * 0.95);
       root.add(pump);
+    } else if (id === 'smg') {
+      const mag = new THREE.Mesh(this.track(new THREE.BoxGeometry(bw * 0.7, 0.22, 0.07)), darkMat);
+      mag.position.set(0, -bh * 1.05, -bd * 0.42);
+      root.add(mag);
+
+      const stock = new THREE.Mesh(this.track(new THREE.BoxGeometry(bw * 0.3, 0.05, 0.14)), darkMat);
+      stock.position.set(0, bh * 0.1, 0.08);
+      root.add(stock);
+    } else if (id === 'sniper') {
+      // Luneta: dois aneis e um tubo. E' o que identifica a arma de relance.
+      const tube = new THREE.Mesh(
+        this.track(new THREE.CylinderGeometry(0.026, 0.026, 0.3, 12)), darkMat,
+      );
+      tube.rotation.x = Math.PI / 2;
+      tube.position.set(0, bh * 0.95, -bd * 0.45);
+      root.add(tube);
+
+      for (const z of [-0.12, 0.12]) {
+        const ring = new THREE.Mesh(
+          this.track(new THREE.CylinderGeometry(0.034, 0.034, 0.03, 12)), bodyMat,
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(0, bh * 0.95, -bd * 0.45 + z);
+        root.add(ring);
+      }
+
+      const mount = new THREE.Mesh(this.track(new THREE.BoxGeometry(0.02, bh * 0.5, 0.04)), darkMat);
+      mount.position.set(0, bh * 0.65, -bd * 0.45);
+      root.add(mount);
+
+      const stock = new THREE.Mesh(this.track(new THREE.BoxGeometry(bw * 0.9, bh * 1.1, 0.2)), bodyMat);
+      stock.position.set(0, -bh * 0.25, 0.09);
+      root.add(stock);
+
+      const bipod = new THREE.Mesh(this.track(new THREE.BoxGeometry(0.012, 0.11, 0.012)), darkMat);
+      bipod.position.set(0, -bh * 0.7, -bd - 0.05);
+      root.add(bipod);
     } else {
+      // pistolas: ferrolho por cima
       const slide = new THREE.Mesh(this.track(new THREE.BoxGeometry(bw * 1.05, 0.045, bd * 0.95)), darkMat);
       slide.position.set(0, bh * 0.5, -bd / 2);
       root.add(slide);
+      if (id === 'deagle') {
+        const vent = new THREE.Mesh(this.track(new THREE.BoxGeometry(bw * 0.5, 0.02, bd * 0.5)), bodyMat);
+        vent.position.set(0, bh * 0.62, -bd * 0.62);
+        root.add(vent);
+      }
     }
 
     // ponto de saida do cano (referencia pro tracer)
@@ -207,6 +250,7 @@ export class ViewModel {
   update(
     dt: number,
     opts: {
+      scopedOut?: boolean;
       moveSpeed01: number;
       grounded: boolean;
       adsAmount: number;
@@ -217,6 +261,8 @@ export class ViewModel {
     },
   ): void {
     const rig = this.rigs.get(this.current)!;
+    // Com a luneta na tela a arma so' atrapalha a vista.
+    rig.root.visible = !opts.scopedOut;
 
     // recuo volta pra posicao
     this.recoilOffset = damp(this.recoilOffset, 0, 14, dt);
