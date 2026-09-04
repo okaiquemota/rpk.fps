@@ -38,12 +38,25 @@ npm run typecheck  # só o tsc, sem gerar nada
 
 | `Esc` | Pausar |
 
-Onde o navegador não permitir capturar o cursor (dentro de um iframe, por
-exemplo), o jogo avisa e entra em modo de mira solta: o mouse continua girando
-a câmera, e empurrá-lo contra a borda da tela mantém o giro — é assim que você
-dá a volta completa sem o cursor esbarrar na moldura da janela. O giro só age
-com o mouse em movimento (largar o cursor na borda não faz a tela girar
-sozinha) e pode ser desligado no menu de pausa.
+### Sobre a captura do mouse
+
+Um FPS precisa capturar o cursor (pointer lock) para a mira funcionar direito.
+O jogo pede isso ao começar, junto com tela cheia, e **continua tentando a cada
+clique** — o navegador recusa a captura em situações passageiras (logo depois de
+você sair de um lock com Esc, por exemplo), e desistir na primeira recusa
+condenava a partida inteira.
+
+Enquanto a captura não vem, entra o modo de mira solta: o mouse continua girando
+a câmera, e empurrá-lo contra a borda da tela mantém o giro, para você dar a
+volta completa sem o cursor esbarrar na moldura. Esse giro só age com o mouse em
+movimento — largar o cursor na borda não faz a tela girar sozinha — e pode ser
+desligado no menu de pausa.
+
+**Uma página dentro de um iframe pode ter a captura bloqueada por política do
+navegador, e aí não há o que o jogo faça.** Nesse caso, rode-o fora do iframe:
+`npm run dev`, ou `npm run build:single` e abra o `dist/rpk-fps.html` direto no
+navegador. Tela cheia (`F`) também ajuda bastante, porque a área para girar o
+mouse passa a ser o monitor inteiro.
 
 ## Como o jogo funciona
 

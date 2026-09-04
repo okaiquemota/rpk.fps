@@ -66,6 +66,7 @@ export class Game {
   private shotsFired = 0;
   private shotsHit = 0;
   private deathTimer = 0;
+  private wasInFallback = false;
 
   constructor(canvas: HTMLCanvasElement) {
     // ---------- renderer ----------
@@ -146,23 +147,29 @@ export class Game {
 
     // ---------- entrada e UI ----------
     this.input = new Input(canvas);
+    this.input.onFallback = () => { this.wasInFallback = true; this.announceFallback(); };
     this.input.onLockChange = (locked) => this.onPointerLockChange(locked);
-    this.input.onFallback = () => {
-      this.hud.showToast(
-        'MOUSE SOLTO',
-        'Aqui o navegador nao deixa capturar o cursor. Leve o mouse ate a borda da tela para continuar girando — ou use as setas',
-      );
-    };
 
-    // Clicar no jogo tenta recapturar o mouse (perde-se ao trocar de aba).
+    // Clicar no jogo tenta recapturar o mouse. Vale mesmo estando em fallback:
+    // a recusa pode ter sido passageira, e o Input sabe se conter entre pedidos.
     canvas.addEventListener('mousedown', () => {
-      if (this.state === 'playing' && !this.input.active) this.input.requestLock();
+      if (this.state === 'playing' && !this.input.locked) this.input.requestLock();
+    });
+
+    // Entrar em tela cheia costuma destravar a captura do mouse; quando nao
+    // destrava, ao menos a area pra girar passa a ser o monitor inteiro.
+    document.addEventListener('fullscreenchange', () => {
+      this.onResize();
+      if (document.fullscreenElement && this.state === 'playing') {
+        window.setTimeout(() => this.input.requestLock(true), 140);
+      }
     });
 
     this.screens.onPlay = () => this.startRun();
     this.screens.onResume = () => this.resume();
     this.screens.onRestart = () => this.startRun();
     this.screens.onSettingsChange = (s) => this.applySettings(s);
+    this.screens.onFullscreen = () => { this.requestFullscreen(); this.resume(); };
     this.applySettings(this.screens.save.settings);
 
     window.addEventListener('resize', this.onResize);
@@ -232,6 +239,33 @@ export class Game {
     this.warmupKeepAlive = dummies;
   }
 
+  /** Pede tela cheia. Se o navegador recusar, o jogo segue igual. */
+  private requestFullscreen(): void {
+    if (document.fullscreenElement) return;
+    try {
+      const r = document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
+      if (r instanceof Promise) r.catch(() => { /* sem tela cheia, paciencia */ });
+    } catch {
+      /* idem */
+    }
+  }
+
+  private toggleFullscreen(): void {
+    if (document.fullscreenElement) void document.exitFullscreen?.();
+    else this.requestFullscreen();
+  }
+
+  /** Explica o modo de mira solta, ja' contando o que o jogador pode fazer. */
+  private announceFallback(): void {
+    const blocked = Input.pointerLockAllowed() === false;
+    this.hud.showToast(
+      'MOUSE SOLTO',
+      blocked
+        ? 'Esta pagina nao pode capturar o cursor. Tecle F para tela cheia, empurre o mouse na borda para girar, ou use as setas'
+        : 'Nao consegui capturar o cursor agora. Clique na tela para tentar de novo, ou tecle F para tela cheia',
+    );
+  }
+
   private applySettings(s: Settings): void {
     this.player.sensitivity = s.sensitivity;
     this.player.edgeTurnEnabled = s.edgeTurn;
@@ -266,7 +300,9 @@ export class Game {
     this.screens.hideAll();
     this.hud.show();
     this.input.resetPointerIdle();
-    this.input.requestLock();
+    // Os dois no mesmo gesto do clique: e' a ativacao do usuario que autoriza.
+    this.requestFullscreen();
+    this.input.requestLock(true);
     this.hud.showToast('SOBREVIVA', 'A primeira onda chega em instantes');
   }
 
@@ -286,13 +322,20 @@ export class Game {
     this.screens.hideAll();
     this.audio.resume();
     this.input.resetPointerIdle();
-    this.input.requestLock();
+    this.input.requestLock(true);
   }
 
   private onPointerLockChange(locked: boolean): void {
+    if (locked) {
+      if (this.wasInFallback) {
+        this.wasInFallback = false;
+        this.hud.showToast('MOUSE CAPTURADO', 'Mira normal de FPS');
+      }
+      return;
+    }
     // Perder o lock durante o jogo = pausa. Sair pelo menu ja' esta' tratado.
     // No modo fallback nunca houve lock pra perder.
-    if (!locked && this.state === 'playing' && !this.input.fallback) this.pause();
+    if (this.state === 'playing' && !this.input.fallback) this.pause();
   }
 
   private onPlayerDeath(): void {
@@ -542,6 +585,7 @@ export class Game {
 
     if (this.state === 'playing') {
       if (this.input.wasPressed('Escape')) { this.pause(); return; }
+      if (this.input.wasPressed('KeyF')) this.toggleFullscreen();
 
       this.accumulatedLook.dx = this.input.mouseDX;
       this.accumulatedLook.dy = this.input.mouseDY;

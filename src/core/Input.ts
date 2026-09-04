@@ -2,16 +2,25 @@
  * Teclado + mouse + pointer lock.
  * O jogo so' le' estado daqui; nada de listeners espalhados pelo codigo.
  *
- * Nem todo contexto deixa capturar o mouse — um iframe sem `allow="pointer-lock"`
- * recusa o pedido. Quando isso acontece entramos no modo `fallback`: o mouse
- * continua girando a camera enquanto o ponteiro estiver sobre a pagina, e as
- * setas do teclado viram uma alternativa completa de mira.
+ * Capturar o mouse pode falhar por motivos PASSAGEIROS — o navegador bloqueia
+ * novos pedidos por cerca de um segundo depois que voce sai de um lock com Esc,
+ * e recusa quando a pagina ainda nao tem foco. Por isso `requestLock()` nunca
+ * desiste: tenta de novo a cada clique, e o modo `fallback` e' um estado
+ * corrente que se desfaz sozinho assim que a captura funciona.
+ *
+ * Enquanto ele durar, o mouse solto continua girando a camera e as setas viram
+ * uma alternativa completa de mira.
  *
  * Sem lock o cursor para na borda da janela e o movimento relativo zera — a
  * camera trava e voce nao consegue dar meia-volta. Por isso rastreamos tambem a
  * POSICAO do ponteiro (`pointerNX`/`pointerNY`): quem cuida do giro continuo
  * perto da borda e' o Player, com base nesses valores.
  */
+/** Intervalo minimo entre duas tentativas de capturar o mouse. */
+const RETRY_INTERVAL_MS = 800;
+/** Quantas recusas seguidas ate' assumir que a captura nao vai rolar. */
+const FAILURES_BEFORE_FALLBACK = 2;
+
 export class Input {
   private keys = new Set<string>();
   private pressedThisFrame = new Set<string>();
@@ -25,8 +34,10 @@ export class Input {
   private buttonsPressed = new Set<number>();
 
   locked = false;
-  /** Sem pointer lock disponivel: mira pelo movimento do mouse solto + setas. */
+  /** Sem pointer lock AGORA: mira pelo movimento do mouse solto + setas. */
   fallback = false;
+  private failedLockAttempts = 0;
+  private lastLockAttempt = -Infinity;
   /** Posicao do ponteiro em [-1, 1] a partir do centro da janela. */
   pointerNX = 0;
   pointerNY = 0;
@@ -118,7 +129,14 @@ export class Input {
 
   private onPointerLockChange = (): void => {
     this.locked = document.pointerLockElement === this.canvas;
-    if (!this.locked) { this.keys.clear(); this.buttons.clear(); }
+    if (this.locked) {
+      // Deu certo: o fallback nao e' permanente, sai de cena.
+      this.failedLockAttempts = 0;
+      this.fallback = false;
+    } else {
+      this.keys.clear();
+      this.buttons.clear();
+    }
     this.onLockChange?.(this.locked);
   };
 
@@ -132,26 +150,52 @@ export class Input {
     this.onFallback?.();
   }
 
-  requestLock(): void {
+  /**
+   * Pede a captura do mouse. Pode ser chamado a vontade: ignora pedidos em
+   * rajada e continua tentando mesmo depois de falhar — e' assim que o jogo se
+   * recupera de uma recusa passageira do navegador.
+   */
+  requestLock(force = false): void {
     if (this.locked) return;
-    if (this.fallback) return;
+
+    const now = performance.now();
+    if (!force && now - this.lastLockAttempt < RETRY_INTERVAL_MS) return;
+    this.lastLockAttempt = now;
+
+    const onFailure = (): void => {
+      this.failedLockAttempts++;
+      // Uma recusa isolada nao condena a sessao; algumas seguidas, sim.
+      if (this.failedLockAttempts >= FAILURES_BEFORE_FALLBACK) this.enterFallback();
+    };
 
     // requestPointerLock devolve Promise nos navegadores atuais e undefined nos
-    // antigos; os dois caminhos precisam cair no fallback quando falham.
+    // antigos; os dois caminhos precisam tratar a falha.
     let result: unknown;
     try {
       result = this.canvas.requestPointerLock();
     } catch {
-      this.enterFallback();
+      onFailure();
       return;
     }
     if (result instanceof Promise) {
-      result.catch(() => this.enterFallback());
+      result.catch(onFailure);
     } else {
       // Sem Promise nao ha' erro pra capturar: damos um tempo e checamos.
-      window.setTimeout(() => {
-        if (!this.locked) this.enterFallback();
-      }, 400);
+      window.setTimeout(() => { if (!this.locked) onFailure(); }, 400);
+    }
+  }
+
+  /** O navegador permite pointer lock aqui? `null` = nao da' pra saber. */
+  static pointerLockAllowed(): boolean | null {
+    const policy = (document as unknown as {
+      featurePolicy?: { allowsFeature(f: string): boolean };
+      permissionsPolicy?: { allowsFeature(f: string): boolean };
+    });
+    const api = policy.permissionsPolicy ?? policy.featurePolicy;
+    try {
+      return api ? api.allowsFeature('pointer-lock') : null;
+    } catch {
+      return null;
     }
   }
 

@@ -47,6 +47,7 @@ export class Screens {
   onResume: (() => void) | null = null;
   onRestart: (() => void) | null = null;
   onSettingsChange: ((s: Settings) => void) | null = null;
+  onFullscreen: (() => void) | null = null;
 
   constructor() {
     this.save = this.load();
@@ -82,6 +83,7 @@ export class Screens {
     $('btn-resume').addEventListener('click', () => this.onResume?.());
     $('btn-restart').addEventListener('click', () => this.onRestart?.());
     $('btn-restart-pause').addEventListener('click', () => this.onRestart?.());
+    $('btn-fullscreen').addEventListener('click', () => this.onFullscreen?.());
   }
 
   private bindSliders(): void {
