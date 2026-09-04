@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>RPK.FPS</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎯</text></svg>" />
-  <link rel="stylesheet" href="/src/ui/style.css" />
+  <link rel="stylesheet" href="/src/ui/style.css" onerror="window.__semBuild = 1" />
 </head>
 <body>
   <canvas id="viewport"></canvas>
@@ -126,6 +126,40 @@
 
   <div id="loading" class="screen"><div class="panel"><h2>CARREGANDO</h2></div></div>
 
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/main.ts" onerror="window.__semBuild = 1"></script>
+
+  <script>
+    // Este index.html e' o ARQUIVO FONTE: aponta para /src/main.ts, que so' existe
+    // sob o servidor de desenvolvimento ou depois do build. Servido cru — com o
+    // GitHub Pages apontado para a raiz do repositorio, por exemplo — os caminhos
+    // absolutos ainda saem do subdiretorio do site e nada carrega.
+    //
+    // Em vez de deixar a pessoa olhando um markup pelado sem explicacao, avisamos.
+    (function () {
+      function avisar() {
+        document.body.innerHTML =
+          '<div style="font:14px/1.7 ui-monospace,Menlo,Consolas,monospace;color:#e8e6e3;' +
+          'background:#0b0d10;min-height:100vh;display:grid;place-items:center;padding:24px">' +
+          '<div style="max-width:44em">' +
+          '<h1 style="font-size:22px;letter-spacing:2px;margin:0 0 16px">ESTA E A VERSAO NAO COMPILADA</h1>' +
+          '<p style="opacity:.75;margin:0 0 14px">Voce esta vendo o arquivo fonte do projeto. O jogo e ' +
+          'escrito em TypeScript e precisa passar pelo build antes de rodar no navegador.</p>' +
+          '<p style="opacity:.75;margin:0 0 8px"><b>Para rodar em casa:</b> npm install, depois npm run dev</p>' +
+          '<p style="opacity:.75;margin:0"><b>Para publicar no GitHub Pages:</b> em Settings &rarr; Pages, ' +
+          'escolha <b>Source: GitHub Actions</b> — nao "Deploy from a branch". O workflow do repositorio ' +
+          'compila e publica sozinho.</p>' +
+          '</div></div>';
+      }
+      addEventListener('load', function () {
+        if (window.__semBuild) { avisar(); return; }
+        // Sem erro explicito, damos tempo de sobra pro jogo subir (ele compila
+        // shaders antes de aparecer) e so' entao concluimos que algo falhou.
+        setTimeout(function () {
+          var loading = document.getElementById('loading');
+          if (loading && !loading.classList.contains('hidden')) avisar();
+        }, 6000);
+      });
+    })();
+  </script>
 </body>
 </html>

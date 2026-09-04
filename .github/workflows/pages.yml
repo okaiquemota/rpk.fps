@@ -6,7 +6,9 @@ name: Publicar no GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - claude/fps-shooter-game-0denpk
   # Permite publicar manualmente a partir de qualquer branch, pela aba Actions.
   workflow_dispatch:
 

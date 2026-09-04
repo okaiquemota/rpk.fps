@@ -28,6 +28,11 @@ O repositório já traz um workflow de GitHub Pages
 (`.github/workflows/pages.yml`). Para ligar:
 
 1. **Settings → Pages → Source: "GitHub Actions"**
+   Não escolha *"Deploy from a branch"*: nesse modo o GitHub serve os arquivos
+   do repositório como estão, e o `index.html` da raiz é o arquivo fonte — ele
+   aponta para `/src/main.ts`, que o navegador não sabe executar. O resultado é
+   uma página crua, sem estilo e sem jogo. (Se isso acontecer, a própria página
+   avisa e diz o que corrigir.)
 2. Faça merge na `main` (ou rode o workflow à mão pela aba **Actions**)
 3. O jogo sai em `https://<usuario>.github.io/rpk.fps/`
 
