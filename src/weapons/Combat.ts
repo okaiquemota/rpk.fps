@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { COMBAT } from '../config';
-import { gaussian, rayAABB } from '../core/math';
+import { AABB, gaussian, rayAABB } from '../core/math';
 import type { Enemy } from '../enemies/Enemy';
 import type { EnemyManager } from '../enemies/EnemyManager';
 import type { Effects } from '../fx/Effects';
@@ -15,6 +15,17 @@ export interface EnemyHit {
   damage: number;
   headshot: boolean;
   killed: boolean;
+}
+
+/**
+ * Qualquer coisa que possa levar tiro sem ser inimigo — hoje, os alvos do campo
+ * de tiro. Fica aqui pra o CombatSystem continuar sendo o unico lugar que
+ * decide o que a bala acerta.
+ */
+export interface ShootableTarget {
+  aabb: AABB;
+  hittable: boolean;
+  onHit(point: THREE.Vector3, damage: number, headshot: boolean): void;
 }
 
 export interface ShotReport {
@@ -32,6 +43,13 @@ export interface ShotReport {
   hits: EnemyHit[];
   /** Pellets que bateram em geometria do nivel (pra som de ricochete). */
   surfaceHits: number;
+  /** Pellets que bateram num alvo de treino. */
+  targetHits: number;
+  /**
+   * Onde cada pellet bateu na geometria do nivel. E' com isso que o campo de
+   * tiro mede o agrupamento na parede de padrao.
+   */
+  surfacePoints: THREE.Vector3[];
 }
 
 const _dir = new THREE.Vector3();
@@ -49,16 +67,23 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
  * O tracer e' que sai do cano — visual e fisica separados, como todo FPS faz.
  */
 export class CombatSystem {
+  /** Alvos que nao sao inimigos (campo de tiro). Vazio na partida normal. */
+  private extraTargets: readonly ShootableTarget[] = [];
+
   constructor(
     private level: Level,
     private enemies: EnemyManager,
     private effects: Effects,
   ) {}
 
+  setExtraTargets(targets: readonly ShootableTarget[]): void {
+    this.extraTargets = targets;
+  }
+
   fire(player: Player, weapon: Weapon, muzzleWorld: THREE.Vector3): ShotReport {
     const report: ShotReport = {
       pellets: weapon.def.pellets, pelletsHit: 0, totalDamage: 0,
-      headshots: 0, kills: [], anyHit: false, surfaceHits: 0, hits: [],
+      headshots: 0, kills: [], anyHit: false, surfaceHits: 0, targetHits: 0, surfacePoints: [], hits: [],
     };
 
     const origin = player.eyePosition;
@@ -84,6 +109,7 @@ export class CombatSystem {
       const maxDist = Math.min(weapon.def.range, COMBAT.maxRange);
       let closest = maxDist;
       let hitEnemy: Enemy | null = null;
+      let hitTarget: ShootableTarget | null = null;
       let hitNormal: THREE.Vector3 | null = null;
 
       // --- geometria do nivel ---
@@ -102,6 +128,19 @@ export class CombatSystem {
         if (t >= 0 && t < closest) {
           closest = t;
           hitEnemy = enemy;
+          hitTarget = null;
+          hitNormal = null;
+        }
+      }
+
+      // --- alvos de treino ---
+      for (const target of this.extraTargets) {
+        if (!target.hittable) continue;
+        const t = rayAABB(origin, _dir, target.aabb, closest);
+        if (t >= 0 && t < closest) {
+          closest = t;
+          hitEnemy = null;
+          hitTarget = target;
           hitNormal = null;
         }
       }
@@ -138,12 +177,23 @@ export class CombatSystem {
             damage: result.applied, headshot, killed: result.killed,
           });
         }
+      } else if (hitTarget) {
+        const damage = weapon.def.damage * weapon.damageAt(closest) * player.stats.damageMult;
+        const headshot = _point.y >= hitTarget.aabb.min.y
+          + (hitTarget.aabb.max.y - hitTarget.aabb.min.y) * COMBAT.headHeightFraction;
+        hitTarget.onHit(_point.clone(), damage, headshot);
+        this.effects.impact(_point, _dir.clone().negate(), _dir, false);
+        report.pelletsHit++;
+        report.targetHits++;
+        report.anyHit = true;
+        if (headshot) report.headshots++;
       } else if (closest < maxDist) {
         // Um buraco por pellet empilha 9 decais no mesmo palmo de parede e vira
         // uma mancha preta; espalhar em alguns ja' le' como padrao de chumbo.
         const withDecal = weapon.def.pellets === 1 || i % 3 === 0;
         this.effects.impact(_point, hitNormal ?? _dir.clone().negate(), _dir, withDecal);
         report.surfaceHits++;
+        report.surfacePoints.push(_point.clone());
       }
 
       // Um tracer por pellet polui demais na escopeta; um a cada tres resolve.

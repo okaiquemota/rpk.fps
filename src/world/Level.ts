@@ -18,7 +18,21 @@ interface BlockSpec {
  */
 export class Level {
   readonly group = new THREE.Group();
-  readonly colliders: AABB[] = [];
+  /**
+   * Colisores em uso agora.
+   *
+   * O chao e as paredes externas valem sempre; os obstaculos internos so' no
+   * modo de ondas. O campo de tiro precisa de um espaco limpo — com os blocos
+   * da arena no caminho, metade dos tiros morria num caixote antes de chegar na
+   * parede de padrao (foi exatamente o que aconteceu na primeira versao).
+   */
+  colliders: AABB[] = [];
+  /** Chao e paredes externas: valem em qualquer modo. */
+  private baseColliders: AABB[] = [];
+  /** Obstaculos internos da arena. */
+  private propColliders: AABB[] = [];
+  /** Grupo dos obstaculos, pra poder escondê-los inteiros. */
+  private propsGroup = new THREE.Group();
   readonly spawnPoints: THREE.Vector3[] = [];
   readonly playerStart = new THREE.Vector3(0, 0, 18);
   readonly size = WORLD.arenaSize;
@@ -32,7 +46,9 @@ export class Level {
     this.buildFloor();
     this.buildWalls();
     this.buildProps();
+    this.group.add(this.propsGroup);
     this.buildLights();
+    this.useArenaLayout();
     this.computeSpawnPoints();
   }
 
@@ -96,7 +112,7 @@ export class Level {
     this.materials.push(mat);
 
     // Chao como colisor: uma laje grossa abaixo de y=0 evita cair pra fora do mundo.
-    this.colliders.push(new AABB(
+    this.baseColliders.push(new AABB(
       new THREE.Vector3(-half, -4, -half),
       new THREE.Vector3(half, 0, half),
     ));
@@ -127,7 +143,7 @@ export class Level {
       mesh.castShadow = true;
       this.group.add(mesh);
       this.geometries.push(geo);
-      this.colliders.push(AABB.fromCenterSize(x, y, z, w, wh, d));
+      this.baseColliders.push(AABB.fromCenterSize(x, y, z, w, wh, d));
     }
   }
 
@@ -203,9 +219,9 @@ export class Level {
       mesh.position.set(s.x, s.y + s.h / 2, s.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      this.group.add(mesh);
+      this.propsGroup.add(mesh);
       this.geometries.push(geo);
-      this.colliders.push(AABB.fromFootprint(s.x, s.y, s.z, s.w, s.h, s.d));
+      this.propColliders.push(AABB.fromFootprint(s.x, s.y, s.z, s.w, s.h, s.d));
     }
   }
 
@@ -241,6 +257,18 @@ export class Level {
       p.position.set(x, y, z);
       this.group.add(p);
     }
+  }
+
+  /** Arena completa: obstaculos visiveis e colidindo. */
+  useArenaLayout(): void {
+    this.propsGroup.visible = true;
+    this.colliders = [...this.baseColliders, ...this.propColliders];
+  }
+
+  /** Espaco limpo, com os colisores que o modo passar (parede de padrao etc). */
+  useRangeLayout(extra: readonly AABB[]): void {
+    this.propsGroup.visible = false;
+    this.colliders = [...this.baseColliders, ...extra];
   }
 
   private computeSpawnPoints(): void {

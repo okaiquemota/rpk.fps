@@ -88,6 +88,15 @@
       <div id="reload-hint" class="hidden">R &mdash; RECARREGAR</div>
     </div>
 
+    <div id="range-panel" class="hidden">
+      <div class="rp-title">CAMPO DE TIRO</div>
+      <div class="rp-row"><span>ALVOS</span><b id="rp-hits">0</b></div>
+      <div class="rp-row"><span>NA CABECA</span><b id="rp-head">0</b></div>
+      <div class="rp-row"><span>TIROS</span><b id="rp-shots">0</b></div>
+      <div class="rp-row group"><span>AGRUPAMENTO</span><b id="rp-group">--</b></div>
+      <div class="rp-foot">L limpa a parede</div>
+    </div>
+
     <div id="weapon-wheel"></div>
 
     <!-- centro inferior: aviso de abate -->
@@ -101,7 +110,12 @@
     <div class="panel">
       <h1>RPK<span class="dot">.</span>FPS</h1>
       <p class="tagline">Arena de sobrevivencia &mdash; aguente o maximo de ondas que conseguir.</p>
-      <button class="primary" id="btn-play">JOGAR</button>
+      <div class="mode-picker">
+        <button class="primary" id="btn-play">SOBREVIVENCIA</button>
+        <button class="ghost" id="btn-range">CAMPO DE TIRO</button>
+      </div>
+      <p class="mode-hint">Sobrevivencia: ondas de inimigos e melhorias.<br />
+        Campo de tiro: todas as armas, municao infinita, alvos e medida de agrupamento.</p>
       <div class="controls-grid">
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><div>Mover</div>
         <div><kbd>Shift</kbd></div><div>Correr</div>

@@ -103,6 +103,9 @@ body.playing { cursor: none; }
 .team-score { font-size: 22px; font-weight: 700; line-height: 1; }
 #round-timer { font-size: 15px; opacity: 0.62; letter-spacing: 1px; min-width: 56px; text-align: center; }
 #wave-line { font-size: 15px; letter-spacing: 4px; color: var(--accent); }
+/* No campo de tiro nao ha onda: sobra so' a etiqueta do modo. */
+#wave-line.label-only { font-size: 0; }
+#wave-line.label-only #wave-mod { font-size: 12px; margin-left: 0; }
 #wave-mod {
   margin-left: 10px; padding: 2px 8px; font-size: 11px; letter-spacing: 3px;
   background: var(--accent); color: #10120f; vertical-align: middle;
@@ -386,6 +389,26 @@ button.ghost { background: transparent; color: var(--ink); border: 1px solid rgb
   font-size: 10px; letter-spacing: 1px; padding: 4px 9px;
   border: 1px solid rgba(255, 157, 46, 0.35); color: var(--accent); opacity: 0.85;
 }
+
+.mode-picker { display: flex; flex-direction: column; gap: 9px; }
+.mode-hint {
+  margin-top: 14px; font-size: 11px; line-height: 1.8; opacity: 0.45; letter-spacing: 1px;
+}
+
+/* --- painel do campo de tiro --- */
+#range-panel {
+  position: absolute; left: 24px; top: 232px;
+  min-width: 190px; padding: 11px 14px;
+  background: rgba(8, 10, 14, 0.6);
+  border-left: 2px solid var(--accent);
+  font-size: 11px; letter-spacing: 2px;
+}
+.rp-title { color: var(--accent); font-weight: 700; margin-bottom: 9px; }
+.rp-row { display: flex; justify-content: space-between; gap: 16px; margin-top: 4px; opacity: 0.75; }
+.rp-row b { font-weight: 700; opacity: 1; font-variant-numeric: tabular-nums; }
+.rp-row.group { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.rp-row.group b { color: var(--accent); font-size: 14px; }
+.rp-foot { margin-top: 10px; font-size: 9px; opacity: 0.35; }
 
 .controls-grid {
   display: grid; grid-template-columns: auto 1fr; gap: 9px 20px;

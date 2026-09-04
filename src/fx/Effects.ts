@@ -493,6 +493,11 @@ export class Effects {
     for (const d of this.decals) d.visible = on;
   }
 
+  /** Apaga so' os buracos de bala, sem mexer no resto dos efeitos. */
+  clearDecals(): void {
+    for (const d of this.decals) d.visible = false;
+  }
+
   addShake(amount: number): void {
     this.shakeTrauma = clamp(this.shakeTrauma + amount, 0, 1);
   }

@@ -24,6 +24,12 @@ export class Minimap {
   private planScale = 4;
   private planOffset = 0;
 
+  /** Troca o nome mostrado sob o minimapa. */
+  setLabel(text: string): void {
+    const el = document.getElementById('minimap-label');
+    if (el) el.textContent = text;
+  }
+
   constructor(private level: Level) {
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'minimap';

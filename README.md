@@ -76,6 +76,20 @@ navegador, e aí não há o que o jogo faça.** Nesse caso, rode-o fora do ifram
 navegador. Tela cheia (`F`) também ajuda bastante, porque a área para girar o
 mouse passa a ser o monitor inteiro.
 
+## Modos
+
+A tela inicial escolhe entre dois:
+
+- **Sobrevivência** — ondas de inimigos, melhorias entre elas, o jogo em si.
+- **Campo de tiro** — sem inimigos, com as seis armas liberadas e munição
+  infinita. Serve para sentir recuo e som, e para comparar armas com número em
+  vez de impressão: uma parede clara registra os impactos e o painel mostra o
+  **agrupamento** (raio médio dos furos em torno do centro deles). `L` limpa a
+  parede para repetir o teste. Há cinco alvos que caem e levantam — três
+  parados a distâncias diferentes e dois em movimento.
+
+Para calibrar: fuzil da cintura agrupa em ~15 cm a 22 m; mirando, em ~3 cm.
+
 ## Como o jogo funciona
 
 - **Ondas.** Cada onda traz mais inimigos, com mais vida e mais rápidos. Tipos

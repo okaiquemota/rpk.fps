@@ -35,6 +35,11 @@ export class HUD {
   private scoreRight = $('score-right');
   private roundTimer = $('round-timer');
   private scope = $('scope');
+  private rangePanel = $('range-panel');
+  private rpHits = $('rp-hits');
+  private rpHead = $('rp-head');
+  private rpShots = $('rp-shots');
+  private rpGroup = $('rp-group');
   private scopeOn = false;
   private enemiesValue = $('enemies-value');
   private scoreValue = $('score-value');
@@ -137,10 +142,12 @@ export class HUD {
     }
   }
 
+  /** `wave` 0 esconde o numero: o campo de tiro nao tem ondas. */
   setWave(wave: number, enemiesLeft: number, modifier: string): void {
+    this.waveLine.classList.toggle('label-only', wave <= 0);
     if (wave !== this.last.wave) {
       this.last.wave = wave;
-      this.waveValue.textContent = String(wave);
+      this.waveValue.textContent = wave > 0 ? String(wave) : '';
     }
     if (enemiesLeft !== this.last.enemies) {
       this.last.enemies = enemiesLeft;
@@ -173,6 +180,22 @@ export class HUD {
       el.classList.toggle('locked', !unlocked.has(id));
       el.classList.toggle('active', id === active);
     }
+  }
+
+  /**
+   * Painel do campo de tiro. `null` esconde — o modo de ondas nao usa.
+   * O agrupamento so' aparece com amostra suficiente pra significar algo.
+   */
+  setRangeStats(s: {
+    acertos: number; headshots: number; tiros: number;
+    agrupamentoCm: number; amostras: number;
+  } | null): void {
+    this.rangePanel.classList.toggle('hidden', s === null);
+    if (!s) return;
+    this.rpHits.textContent = String(s.acertos);
+    this.rpHead.textContent = String(s.headshots);
+    this.rpShots.textContent = String(s.tiros);
+    this.rpGroup.textContent = s.amostras >= 3 ? `${s.agrupamentoCm} cm` : '--';
   }
 
   /** Liga a mira telescopica e esconde a mira comum. */

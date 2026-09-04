@@ -46,6 +46,7 @@ export class Screens {
   save: SaveData;
 
   onPlay: (() => void) | null = null;
+  onPlayRange: (() => void) | null = null;
   onResume: (() => void) | null = null;
   onRestart: (() => void) | null = null;
   onSettingsChange: ((s: Settings) => void) | null = null;
@@ -83,6 +84,7 @@ export class Screens {
 
   private bindButtons(): void {
     $('btn-play').addEventListener('click', () => this.onPlay?.());
+    $('btn-range').addEventListener('click', () => this.onPlayRange?.());
     $('btn-resume').addEventListener('click', () => this.onResume?.());
     $('btn-restart').addEventListener('click', () => this.onRestart?.());
     $('btn-restart-pause').addEventListener('click', () => this.onRestart?.());

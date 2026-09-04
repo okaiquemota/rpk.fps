@@ -40,6 +40,23 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
 - Feedback de combate em DOM (numero de dano, vida do inimigo):
   `src/ui/WorldMarkers.ts`. Seta de direcao do dano: `HUD.showHitDirection`.
 
+## Modos
+
+`GameMode` em `Game.ts` decide o que roda: `waves` (ondas) ou `range` (campo de
+tiro, em `src/modes/ShootingRange.ts`).
+
+O campo de tiro precisa de espaco LIMPO: `Level.useRangeLayout()` esconde os
+obstaculos da arena e troca os colisores pelos do modo. Sem isso, metade dos
+tiros morria num caixote antes de chegar na parede, e alvos nasciam dentro de
+blocos — foi o que aconteceu na primeira versao.
+
+Alvos que nao sao inimigos implementam `ShootableTarget` e entram pelo
+`combat.setExtraTargets()`; o CombatSystem segue sendo o unico lugar que decide
+o que a bala acerta.
+
+Ao criar um modo novo, lembre de mostra-lo no aquecimento (`warmupShaders`),
+senao o custo de compilar reaparece na hora que o jogador escolher o modo.
+
 ## Som
 
 `src/core/Audio.ts` e' uma engine pequena, nao uma lista de bipes. O que faz um

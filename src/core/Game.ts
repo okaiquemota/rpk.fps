@@ -21,8 +21,12 @@ import { Minimap } from '../ui/Minimap';
 import { Compass } from '../ui/Compass';
 import { Screens, type Settings } from '../ui/Screens';
 import { rollUpgrades, UPGRADES, type Upgrade } from '../player/Stats';
+import { ShootingRange } from '../modes/ShootingRange';
 
 type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'upgrading';
+
+/** Sobrevivencia por ondas, ou campo de tiro pra testar armas. */
+export type GameMode = 'waves' | 'range';
 
 const COMBO_WINDOW = 4;
 const MAX_COMBO = 10;
@@ -78,6 +82,8 @@ export class Game {
   private screens = new Screens();
 
   private state: GameState = 'menu';
+  private mode: GameMode = 'waves';
+  private range: ShootingRange;
   private lastTime = 0;
   private accumulatedLook = { dx: 0, dy: 0 };
 
@@ -161,6 +167,10 @@ export class Game {
     this.scene.add(this.enemies.group);
 
     this.combat = new CombatSystem(this.level, this.enemies, this.effects);
+    this.range = new ShootingRange();
+    this.range.group.visible = false;
+    this.scene.add(this.range.group);
+
     this.minimap = new Minimap(this.level);
 
     // ---------- camera da arma ----------
@@ -196,9 +206,10 @@ export class Game {
       }
     });
 
-    this.screens.onPlay = () => this.startRun();
+    this.screens.onPlay = () => this.startRun('waves');
+    this.screens.onPlayRange = () => this.startRun('range');
     this.screens.onResume = () => this.resume();
-    this.screens.onRestart = () => this.startRun();
+    this.screens.onRestart = () => this.startRun(this.mode);
     this.screens.onSettingsChange = (s) => this.applySettings(s);
     this.screens.onFullscreen = () => { this.requestFullscreen(); this.resume(); };
     this.screens.onUpgradePicked = (u) => this.applyUpgrade(u);
@@ -249,6 +260,9 @@ export class Game {
 
     this.effects.setVisibleForWarmup(true);
     this.viewModel.setVisibleForWarmup(true);
+    // O campo de tiro tem materiais proprios: sem ele visivel aqui, o custo
+    // de compilar reapareceria ao escolher o modo.
+    this.range.group.visible = true;
 
     // `compile` resolve os programas dos materiais, mas nao os shaders de sombra
     // nem o envio das geometrias pra GPU. Um frame de verdade resolve os tres.
@@ -261,6 +275,7 @@ export class Game {
 
     this.effects.setVisibleForWarmup(false);
     this.viewModel.setVisibleForWarmup(false);
+    this.range.group.visible = false;
     this.pickups.clear();
     for (const e of dummies) this.scene.remove(e.group);
 
@@ -311,7 +326,8 @@ export class Game {
     this.audio.volume = s.volume;
   }
 
-  private startRun(): void {
+  private startRun(mode: GameMode = 'waves'): void {
+    this.mode = mode;
     this.audio.init();
     this.audio.resume();
 
@@ -331,6 +347,24 @@ export class Game {
     this.shotsHit = 0;
     this.deathTimer = 0;
 
+    this.range.reset();
+    this.range.group.visible = mode === 'range';
+    this.combat.setExtraTargets(mode === 'range' ? this.range.targets : []);
+    if (mode === 'range') this.level.useRangeLayout(this.range.colliders);
+    else this.level.useArenaLayout();
+    this.minimap.setLabel(mode === 'range' ? 'CAMPO DE TIRO' : 'ARENA');
+
+    if (mode === 'range') {
+      // No campo de tiro voce chega com tudo na mao: o proposito e' comparar
+      // armas, nao desbloquear.
+      this.player.position.copy(this.range.spawn);
+      this.player.yaw = 0;
+      for (const w of this.player.weapons.values()) {
+        w.unlocked = true;
+        w.reset();
+      }
+    }
+
     this.viewModel.setWeapon('pistol');
     this.state = 'playing';
     document.body.classList.add('playing');
@@ -340,7 +374,11 @@ export class Game {
     // Os dois no mesmo gesto do clique: e' a ativacao do usuario que autoriza.
     this.requestFullscreen();
     this.input.requestLock(true);
-    this.hud.showToast('SOBREVIVA', 'A primeira onda chega em instantes');
+    if (mode === 'range') {
+      this.hud.showToast('CAMPO DE TIRO', 'Todas as armas liberadas · municao infinita · L limpa a parede');
+    } else {
+      this.hud.showToast('SOBREVIVA', 'A primeira onda chega em instantes');
+    }
   }
 
   private pause(): void {
@@ -603,6 +641,14 @@ export class Game {
 
     const report = this.combat.fire(player, weapon, muzzleWorld);
 
+    if (this.mode === 'range') {
+      this.range.noteShot(weapon.def.pellets);
+      for (const p of report.surfacePoints) this.range.notePatternHit(p);
+      // Reserva sempre cheia: trocar de arma pra testar nao pode esbarrar em
+      // ficar sem bala.
+      if (!weapon.hasInfiniteReserve) weapon.reserve = weapon.def.reserveMax;
+    }
+
     this.shotsFired++;
     if (report.anyHit) this.shotsHit++;
 
@@ -708,7 +754,17 @@ export class Game {
     }
 
     // ---- mundo ----
-    this.enemies.update(dt, player.position, player.alive);
+    if (this.mode === 'range') {
+      this.range.update(dt);
+      // L limpa os buracos da parede: da' pra repetir o teste de padrao limpo.
+      if (this.input.wasPressed('KeyL')) {
+        this.range.clearPattern();
+        this.effects.clearDecals();
+        this.hud.showToast('', 'PAREDE LIMPA');
+      }
+    } else {
+      this.enemies.update(dt, player.position, player.alive);
+    }
 
     _playerBox.setFromFootprint(
       player.position.x, player.position.y, player.position.z,
@@ -764,12 +820,22 @@ export class Game {
       weapon.ammoInMag, weapon.reserve, weapon.hasInfiniteReserve,
       weapon.def.name, weapon.canReload, weapon.magSize, weapon.def.id,
     );
+    // So' o topo da tela muda entre os modos. Mira, giro de borda e slots de
+    // arma valem nos dois — e no campo de tiro a mira abrindo com o recuo e'
+    // justamente o que se quer observar.
     this.hud.setTeamScore(null);
-    this.hud.setWave(
-      Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave,
-      this.enemies.modifierLabel,
-    );
-    this.hud.setScore(this.score, this.kills, this.combo);
+    if (this.mode === 'range') {
+      this.hud.setRangeStats(this.range.stats);
+      this.hud.setWave(0, 0, 'TREINO');
+    } else {
+      this.hud.setRangeStats(null);
+      this.hud.setWave(
+        Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave,
+        this.enemies.modifierLabel,
+      );
+      this.hud.setScore(this.score, this.kills, this.combo);
+    }
+
     this.hud.setEdgeTurn(player.edgeTurnX, player.edgeTurnY);
     this.hud.setCrosshairSpread(
       weapon.currentSpread(player.adsAmount, player.horizontalSpeed > 1.2, !player.grounded),
@@ -811,6 +877,7 @@ export class Game {
     this.projectiles.dispose();
     this.pickups.dispose();
     this.viewModel.dispose();
+    this.range.dispose();
     for (const e of this.warmupKeepAlive) e.dispose();
     disposeEnemyGeometries();
     this.envMap.dispose();
