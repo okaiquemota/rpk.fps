@@ -1,0 +1,142 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>padrao de recuo</title>
+<!--
+  Desenha o rastro da mira de cada arma, em graus, na cadencia de verdade.
+
+  Por que uma pagina e nao um teste no jogo: sob renderizacao por software o
+  jogo roda a ~1.5 fps, e ai' o fuzil dispara 1.5 tiros por segundo em vez de
+  12. Como o recuo acumula por tiro e volta por SEGUNDO, medir assim mede o
+  framerate, nao a arma. Aqui o tempo e' simulado num passo fixo.
+
+  Usa o Weapon e o WEAPON_DEFS de verdade; so' a integracao do recuo esta'
+  repetida do Player.update (as quatro linhas marcadas abaixo).
+
+  Rode com `npm run dev` e abra /scratchpad/recoil.html — antes e depois de
+  mexer em recoilPitch/recoilYaw/recoilRecovery.
+-->
+<style>
+  body { margin: 0; background: #16191f; color: #98a2b3; font: 12px ui-monospace, monospace; }
+  h2 { font-size: 12px; letter-spacing: 3px; color: #ff9d2e; margin: 16px 10px 4px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 10px; }
+  figure { margin: 0; }
+  figcaption { padding: 4px 2px; line-height: 1.5; }
+  figcaption b { color: #d0d5dd; letter-spacing: 2px; font-weight: 400; }
+  canvas { background: #0e1116; display: block; }
+  .n { color: #ff9d2e; }
+  label { padding: 0 10px; }
+  input { width: 60px; background: #0e1116; color: #d0d5dd; border: 1px solid #333; padding: 2px 4px; font: inherit; }
+</style>
+<h2>PADRAO DE RECUO &mdash; RASTRO DA MIRA EM GRAUS</h2>
+<label>fps simulado <input id="fps" value="120" /></label>
+<label>tiros <input id="shots" value="30" /></label>
+<div class="grid" id="out"></div>
+
+<script type="module">
+import { WEAPON_DEFS, WEAPON_ORDER } from '/src/weapons/WeaponDefs.ts';
+import { Weapon } from '/src/weapons/Weapon.ts';
+import { BASE_STATS } from '/src/player/Stats.ts';
+import { damp } from '/src/core/math.ts';
+
+const RAD = 180 / Math.PI;
+const GRAUS_POR_PX = 0.06;   // escala do desenho: 1px = 0.06 grau
+const W = 300, H = 300;
+
+/**
+ * Segura o gatilho por `tiros` disparos e devolve o rastro da mira.
+ *
+ * O recuo e' um OFFSET somado a` mira: sobe por TIRO e volta por SEGUNDO. Quem
+ * decide o formato do rastro e' a briga entre esses dois ritmos, entao a
+ * cadencia da arma tem que ser respeitada — por isso o passo de tempo e' fixo.
+ */
+function simular(def, fps, tiros) {
+  const arma = new Weapon(def, true, { ...BASE_STATS });
+  arma.ammoInMag = tiros;                 // carregador do tamanho do teste
+  const dt = 1 / fps;
+  let alvoP = 0, alvoY = 0, p = 0, y = 0;
+  const rastro = [], pontos = [];
+
+  for (let f = 0; f < fps * 12 && pontos.length < tiros; f++) {
+    arma.update(dt);
+    if (arma.tryFire() === 'fired') {
+      const k = arma.recoilStep();
+      alvoP += k.pitch;
+      alvoY += k.yaw;
+      pontos.push({ p: p * RAD, y: y * RAD, n: pontos.length + 1 });
+    }
+    // --- espelha Player.update (src/player/Player.ts) ---
+    p = damp(p, alvoP, 24, dt);
+    y = damp(y, alvoY, 24, dt);
+    alvoP = damp(alvoP, 0, def.recoilRecovery, dt);
+    alvoY = damp(alvoY, 0, def.recoilRecovery, dt);
+    // ----------------------------------------------------
+    rastro.push({ p: p * RAD, y: y * RAD });
+  }
+  return { rastro, pontos };
+}
+
+function desenhar(nome, def, fps, tiros) {
+  const { rastro, pontos } = simular(def, fps, tiros);
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const cx = W / 2, cy = H - 40;                       // mira parada embaixo
+  const px = v => cx + v / GRAUS_POR_PX;
+  const py = v => cy - v / GRAUS_POR_PX;               // sobe = pra cima
+
+  // grade de 1 grau
+  g.strokeStyle = '#1e242c'; g.lineWidth = 1;
+  for (let d = -6; d <= 6; d++) {
+    g.beginPath(); g.moveTo(px(d), 0); g.lineTo(px(d), H); g.stroke();
+    g.beginPath(); g.moveTo(0, py(d)); g.lineTo(W, py(d)); g.stroke();
+  }
+  g.strokeStyle = '#2f3742';
+  g.beginPath(); g.moveTo(px(0), 0); g.lineTo(px(0), H); g.stroke();
+  g.beginPath(); g.moveTo(0, py(0)); g.lineTo(W, py(0)); g.stroke();
+
+  g.strokeStyle = '#ff9d2e'; g.lineWidth = 1.5;
+  g.beginPath();
+  rastro.forEach((s, i) => (i ? g.lineTo(px(s.y), py(s.p)) : g.moveTo(px(s.y), py(s.p))));
+  g.stroke();
+
+  g.fillStyle = '#f2f4f7';
+  for (const pt of pontos) {
+    g.beginPath(); g.arc(px(pt.y), py(pt.p), 2, 0, Math.PI * 2); g.fill();
+  }
+
+  const subida = Math.max(...rastro.map(s => s.p)) - Math.min(...rastro.map(s => s.p));
+  const abertura = Math.max(...rastro.map(s => s.y)) - Math.min(...rastro.map(s => s.y));
+  const fig = document.createElement('figure');
+  fig.append(c);
+  const cap = document.createElement('figcaption');
+  cap.innerHTML = `<b>${nome}</b> &mdash; ${def.rpm} rpm<br />` +
+    `sobe <span class="n">${subida.toFixed(2)}&deg;</span>, ` +
+    `abre <span class="n">${abertura.toFixed(2)}&deg;</span><br />` +
+    `razao vertical/lateral <span class="n">${(subida / abertura).toFixed(2)}</span>`;
+  fig.append(cap);
+  return fig;
+}
+
+function render() {
+  const fps = +document.getElementById('fps').value || 120;
+  const tiros = +document.getElementById('shots').value || 30;
+  const out = document.getElementById('out');
+  out.replaceChildren();
+  for (const id of WEAPON_ORDER) {
+    const def = WEAPON_DEFS[id];
+    out.append(desenhar(def.name, def, fps, Math.min(tiros, def.magSize)));
+  }
+  window.__resumo = WEAPON_ORDER.map(id => {
+    const def = WEAPON_DEFS[id];
+    const { rastro } = simular(def, fps, Math.min(tiros, def.magSize));
+    const sobe = Math.max(...rastro.map(s => s.p)) - Math.min(...rastro.map(s => s.p));
+    const abre = Math.max(...rastro.map(s => s.y)) - Math.min(...rastro.map(s => s.y));
+    return { arma: def.name, sobe: +sobe.toFixed(2), abre: +abre.toFixed(2),
+             razao: +(sobe / abre).toFixed(2) };
+  });
+  window.__ready = true;
+}
+document.getElementById('fps').oninput = render;
+document.getElementById('shots').oninput = render;
+render();
+</script>

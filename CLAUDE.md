@@ -156,16 +156,39 @@ O recuo e' um OFFSET somado a mira, nunca uma alteracao do `pitch`/`yaw` do
 jogador — por isso ele volta sozinho ao lugar quando a rajada acaba, e quem
 compensou com o mouse termina com a mira mais baixa, como na vida real.
 
-Proporcao: a subida total por carregador e a abertura lateral andam juntas.
-Hoje o jogo esta' na faixa dura — 12 a 22 graus, conforme a arma — depois de uma
-versao mais leve em 8 graus. O que NAO pode mudar e' a proporcao entre os dois
-eixos: a primeira versao de todas subia 20 graus e abria 1, o que e' uma linha
-vertical, nao um desenho que se aprende.
+**`recoilPitch` NAO e' a subida do carregador — e' a subida de UM tiro, e ela
+nunca soma inteira.** O alvo do recuo decai por `recoilRecovery` a cada frame,
+inclusive enquanto se atira, entao segurar o gatilho leva a mira a um patamar,
+nao a uma soma: o que se acumula por tiro e o que volta por segundo se
+equilibram. Multiplicar `recoilPitch` pelo tamanho do carregador da' um numero
+que o jogo nunca chega perto — foi assim que estas notas ja' afirmaram uma
+subida de "12 a 22 graus" quando o fuzil subia 1.7.
 
-Se for preciso afrouxar de novo, mexa em `recoilPitch` e `recoilYaw` juntos, na
-mesma razao, e em `recoilRecovery` (maior = reassenta mais rapido). O teste de
-padrao em `scratchpad/recoil.mjs` desenha o rastro de cada arma em escala real —
-rode antes e depois, e' o jeito de ver o efeito sem jogar.
+Medido (`scratchpad/recoil.html`, 120 fps, carregador cheio):
+
+| arma      | sobe | abre | razao V/H |
+|-----------|------|------|-----------|
+| pistola   | 2.2  | 3.3  | 0.67      |
+| deagle    | 3.2  | 2.5  | 1.30      |
+| smg       | 4.0  | 6.3  | 0.63      |
+| fuzil     | 5.5  | 8.3  | 0.67      |
+| escopeta  | 2.0  | 0.4  | 4.71      |
+| sniper    | 3.3  | 0.2  | 15.8      |
+
+A razao entre os eixos e' o que faz o padrao ser aprendivel. Nas automaticas ela
+mora perto de 0.65: cai pra 0.2 e o rastro vira uma varredura lateral (foi a
+reclamacao "esta so' na horizontal"); passa de umas 3 e vira linha vertical, que
+tambem nao se aprende. Escopeta e sniper sao linha vertical de proposito — em
+arma de um tiro por vez nao ha rastro pra decorar.
+
+Pra afrouxar ou endurecer, mexa em `recoilPitch` e `recoilYaw` juntos e confira
+a razao; `recoilRecovery` maior reassenta mais rapido E abaixa o patamar, entao
+ele mexe nos dois eixos de uma vez.
+
+**Meca com `scratchpad/recoil.html`, nao jogando.** A pagina simula o tempo num
+passo fixo e desenha o rastro de cada arma em graus. Testar recuo dentro do jogo
+sob renderizacao por software mede o framerate, nao a arma: a ~1.5 fps o fuzil
+dispara 1.5 tiros por segundo em vez de 12, e o patamar cai junto.
 
 ## Armadilhas conhecidas
 
