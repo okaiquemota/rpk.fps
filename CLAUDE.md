@@ -139,6 +139,47 @@ Pra conferir se a amostra esta' realmente entrando, `scratchpad/somDoTiro.html`
 renderiza o disparo num OfflineAudioContext e mede. Som gravado e sintetizado
 tem duracao bem diferente, e e' isso que denuncia qual dos dois tocou.
 
+## Cara da arena
+
+A referencia e' patio industrial ao sol, no espirito do CrossFire: concreto
+quente, ferrugem, contentor. A versao anterior era azul-acinzentada com ceu
+quase preto e duas luzes de canto laranja e azul saturadas — lia como galpao
+fechado com iluminacao de fliperama.
+
+O que decide a leitura, em ordem de impacto:
+
+- **O ceu.** Ele ocupa a faixa toda acima do muro. Escuro ali, a arena inteira
+  parece coberta, por mais iluminado que esteja o chao. Hoje e' dia claro com
+  bruma quente no horizonte (`buildSky`), e a `Fog` do `Game` usa a MESMA cor da
+  bruma — destoando, a parede do fundo recorta do ceu como adesivo.
+- **Textura medida em METROS, nao em repeticoes por peca.** `scaleBoxUVs` em
+  `textures.ts` escala as UVs de cada caixa pelo tamanho dela. Sem isso, um
+  bloco de 10 m e um de 2 m mostram uma repeticao cada, a ripa do grande sai
+  cinco vezes maior que a do pequeno, e tudo le' como bloco pintado. O muro usa
+  painel de 4.5 m; os obstaculos, 1.6 m (madeira) e 2.6 m (metal).
+- **Tres TIPOS de peca, nao tres cores da mesma textura**: contentor (nervura
+  vertical), engradado (ripa e travessa diagonal) e chapa (rebite). Reconhecer
+  a peca de longe e' metade da sensacao de mapa.
+- **Sol baixo.** Sombra longa e' o que faz um patio parecer patio; a pino, tudo
+  achata.
+
+A **contagem de luzes nao mudou** de proposito ao trocar a iluminacao — mudar
+quantas luzes a cena tem recompila todo material (ver Armadilhas). Cor e
+intensidade sao de graca; contagem, nao.
+
+Sobre repeticao: mancha grande e' o que mais denuncia uma textura tileada — a
+mesma bolha reaparecendo em catorze painels le' como padrao, enquanto grao fino
+e ruido nao. Por isso o muro leva mancha fraca e ferrugem discreta, e o
+contentor, que aparece em peca pequena, pode levar as duas fortes.
+
+**Pra tirar captura da arena, NAO teleporte pro centro.** Em (0, y, 0) fica o
+nucleo elevado, e a camera nasce dentro do bloco: o que aparece e' a face de
+baixo do bloco de cima, a meio metro do olho — magnificada e borrada, com cara
+de teto de concreto. Perdi meia duzia de capturas investigando esse "teto"
+antes de perceber que o ponto de vista e' que estava dentro do cenario. Use o
+`playerStart` ou um canto, e mire no centro com
+`yaw = Math.atan2(-(0 - x), -(0 - z))` (a convencao vem de `Player.forward`).
+
 ## Modos
 
 `GameMode` em `Game.ts` decide o que roda: `waves` (ondas) ou `range` (campo de
