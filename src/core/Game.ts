@@ -225,6 +225,8 @@ export class Game {
 
     this.warmupShaders();
     warmupWeaponIcons();
+    // Som gravado, se houver: baixa agora, decodifica quando o contexto nascer.
+    void this.audio.preloadShotSamples();
 
     this.screens.hideLoading();
     this.screens.showStart();
@@ -670,7 +672,7 @@ export class Game {
       .addScaledVector(_camUp, -0.1);
     this.effects.ejectShell(_ejectAt, _camRight, _camUp);
 
-    this.audio.shot(SHOT_SOUND[weapon.def.id]);
+    this.audio.shot(SHOT_SOUND[weapon.def.id], undefined, weapon.def.id);
     if (report.surfaceHits > 0) this.audio.impact();
     this.viewModel.onFire(weapon.def.kickback);
     // Mirar segura a arma: o mesmo padrao, com menos amplitude.

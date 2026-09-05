@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>medicao do tiro</title>
+<!--
+  Renderiza o tiro num OfflineAudioContext e mede o resultado, em vez de
+  depender de alguem escutando. E' o gancho que o AudioManager.init(external)
+  existe pra servir.
+
+  Serve pra conferir se a amostra de assets/sounds/ esta' entrando: som gravado
+  e som sintetizado tem duracao e envelope bem diferentes.
+-->
+<style>body{margin:0;background:#16191f;color:#98a2b3;font:12px ui-monospace,monospace}
+pre{padding:12px;line-height:1.7}b{color:#ff9d2e}</style>
+<pre id="out">medindo...</pre>
+<script type="module">
+import { AudioManager } from '/src/core/Audio.ts';
+
+const SR = 48000;
+
+/** Renderiza um disparo e devolve pico, duracao audivel e ataque. */
+async function medir(kind, sample) {
+  const ctx = new OfflineAudioContext(2, SR * 3, SR);
+  const am = new AudioManager();
+  await am.preloadShotSamples();
+  am.init(ctx);
+  // init() dispara a decodificacao sem esperar; da' uma volta no laco de
+  // eventos pra ela terminar antes de renderizar.
+  await new Promise(r => setTimeout(r, 50));
+  am.shot(kind, undefined, sample);
+  const buf = await ctx.startRendering();
+
+  const ch = buf.getChannelData(0);
+  let pico = 0, primeiro = -1, ultimo = -1;
+  for (let i = 0; i < ch.length; i++) {
+    const v = Math.abs(ch[i]);
+    if (v > pico) pico = v;
+    if (v > 0.002) { if (primeiro < 0) primeiro = i; ultimo = i; }
+  }
+  // Ataque medido do INICIO DO SOM, nao do zero: o compressor e o waveshaper
+  // somam ~9ms fixos a tudo, e medir do zero mede o pipeline.
+  let ataque = 0;
+  for (let i = primeiro; i < ch.length; i++) {
+    if (Math.abs(ch[i]) >= pico * 0.9) { ataque = (i - primeiro) / SR; break; }
+  }
+  return {
+    pico: +pico.toFixed(3),
+    duracao: +((ultimo - primeiro) / SR).toFixed(3),
+    ataque: +(ataque * 1000).toFixed(1),
+  };
+}
+
+const linhas = [];
+for (const [rotulo, kind, sample] of [
+  ['fuzil SINTETIZADO', 'rifle', undefined],
+  ['fuzil com AMOSTRA', 'rifle', 'rifle'],
+  ['pistola (sem arquivo)', 'pistol', 'pistol'],
+]) {
+  const m = await medir(kind, sample);
+  linhas.push(`${rotulo.padEnd(24)} pico <b>${String(m.pico).padEnd(6)}</b> duracao <b>${String(m.duracao).padEnd(6)}</b>s  ataque <b>${m.ataque}</b> ms`);
+}
+const am = new AudioManager();
+const achou = await am.preloadShotSamples();
+linhas.unshift(`armas com gravacao em assets/sounds/: <b>${achou}</b>\n`);
+document.getElementById('out').innerHTML = linhas.join('\n');
+window.__ready = true;
+</script>

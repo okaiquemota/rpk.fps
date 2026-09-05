@@ -104,6 +104,41 @@ Os icones sao gerados no aquecimento (`warmupWeaponIcons`), pelo mesmo motivo
 dos shaders: sao ~1ms cada, e sob demanda esse custo cai na primeira troca de
 arma, no meio da partida.
 
+## Sons de tiro gravados (opcionais)
+
+`assets/sounds/` aceita gravacoes de tiro; com arquivo, a arma toca a gravacao
+no lugar das cinco camadas sintetizadas. **Pasta vazia e' o estado normal** — o
+jogo nunca dependeu, e nao passa a depender, de arquivo de audio.
+
+Quem acha os arquivos e' `src/core/ShotSamples.ts`, com `import.meta.glob`, e
+NAO com import estatico: glob sem correspondencia devolve `{}` e o build passa,
+enquanto `import x from '.../pistol.ogg'` quebraria a compilacao pra quem nao
+tem o arquivo. E' a diferenca em relacao aos `.glb`, que precisam existir.
+
+O nome do arquivo e' o id da arma (`rifle.ogg`), com sufixo pra tomadas extras
+(`rifle-2.ogg`). As regras de formato, tamanho e licenca estao em
+`assets/sounds/README.md` — a curta: opus ou mp3, nunca wav, e menos de 600 KB
+por arquivo senao o Vite para de embutir e o build de arquivo unico perde o som
+sem avisar.
+
+Duas decisoes que nao sao obvias:
+
+- **A gravacao passa pelo mesmo `output()` do sintetizado**, com panner e envio
+  de ambiente. E' o que faz o tiro gravado pertencer a` arena em vez de soar
+  como aviso de interface colado por cima. O envio de reverbo vai em 35% do
+  valor sintetizado, porque a gravacao ja' traz a sala dela — mandando o mesmo,
+  empilha ambiente em cima de ambiente.
+- **Baixar e decodificar sao passos separados.** Baixar nao precisa de
+  AudioContext, entao `preloadShotSamples()` roda na tela de carregamento; o
+  contexto so' pode nascer de um clique, e a decodificacao vai junto com o
+  `init()`. Ate' ela terminar os tiros saem sintetizados — nao ha espera nem
+  engasgo. Cuidado: `decodeAudioData` DESTACA o ArrayBuffer, entao os bytes
+  servem uma vez so'.
+
+Pra conferir se a amostra esta' realmente entrando, `scratchpad/somDoTiro.html`
+renderiza o disparo num OfflineAudioContext e mede. Som gravado e sintetizado
+tem duracao bem diferente, e e' isso que denuncia qual dos dois tocou.
+
 ## Modos
 
 `GameMode` em `Game.ts` decide o que roda: `waves` (ondas) ou `range` (campo de

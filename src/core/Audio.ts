@@ -1,6 +1,17 @@
 import { clamp, randRange } from './math';
 
 /** Posicao no mundo, pros sons que vem de algum lugar. */
+import { fetchShotSamples, decodeShotSamples, type RawSamples, type SampleBank } from './ShotSamples';
+
+/**
+ * Quanto a amostra de tiro entra mais baixa que o sintetizado.
+ *
+ * Gravacao de tiro vem normalizada perto de 0 dBFS; o sintetizado sai bem
+ * abaixo disso. Sem abaixar, trocar pro som real dobra o volume percebido do
+ * jogo inteiro.
+ */
+const SAMPLE_GAIN = 0.55;
+
 export interface SoundPos { x: number; y: number; z: number; }
 
 export type ShotKind = 'pistol' | 'rifle' | 'shotgun' | 'heavy' | 'sniper';
@@ -105,6 +116,10 @@ export class AudioManager {
   private shaper: WaveShaperNode | null = null;
   private _volume = 0.7;
 
+  /** Vazio ate' alguem por arquivo em assets/sounds/ — ver ShotSamples.ts. */
+  private samples: SampleBank = new Map();
+  private rawSamples: RawSamples | null = null;
+
   /**
    * Precisa ser chamado a partir de um gesto do usuario (clique).
    *
@@ -112,6 +127,20 @@ export class AudioManager {
    * renderizar os efeitos num buffer e MEDIR o resultado (pico, ataque, cauda)
    * em vez de depender de alguem escutando.
    */
+  /**
+   * Baixa as amostras opcionais de tiro, se houver alguma.
+   *
+   * Separado do init de proposito: baixar nao precisa de AudioContext, entao
+   * roda na tela de carregamento, enquanto o contexto so' pode nascer de um
+   * clique. A decodificacao acontece no init(), e ate' ela terminar os tiros
+   * saem sintetizados — nao ha espera nem engasgo, so' um comeco sintetico.
+   */
+  async preloadShotSamples(): Promise<number> {
+    if (this.rawSamples) return this.rawSamples.size;
+    this.rawSamples = await fetchShotSamples();
+    return this.rawSamples.size;
+  }
+
   init(external?: BaseAudioContext): void {
     if (this.ctx) return;
     let ctx: BaseAudioContext;
@@ -165,6 +194,13 @@ export class AudioManager {
     this.noiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+
+    // decodeAudioData destaca os bytes: serve uma vez, entao solta a referencia.
+    const raw = this.rawSamples;
+    this.rawSamples = null;
+    if (raw?.size) {
+      void decodeShotSamples(ctx, raw).then((bank) => { this.samples = bank; });
+    }
   }
 
   /**
@@ -366,8 +402,17 @@ export class AudioManager {
   // ================= efeitos do jogo =================
 
   /** Disparo do jogador: as quatro camadas do perfil da arma. */
-  shot(kind: ShotKind, at?: SoundPos): void {
+  /**
+   * `sample` e' o id da arma; havendo gravacao pra ele em assets/sounds/, ela
+   * toca no lugar das cinco camadas sintetizadas. Sem arquivo, nada muda.
+   */
+  shot(kind: ShotKind, at?: SoundPos, sample?: string): void {
     const p = SHOT_PROFILES[kind];
+    const takes = sample ? this.samples.get(sample) : undefined;
+    if (takes) {
+      this.playSample(takes, p, at);
+      return;
+    }
     const v = randRange(0.94, 1.06); // variacao por tiro
     const base: VoiceOptions = { at, reverb: p.reverb, drive: p.drive };
 
@@ -381,6 +426,30 @@ export class AudioManager {
     this.burst(p.tailTime, p.tailGain, 'lowpass', 420, 0.5, { at, reverb: Math.min(1, p.reverb * 1.4) });
     // 5. ferrolho
     this.burst(0.03, p.mechGain, 'bandpass', randRange(2400, 3400), 2.2, { at, delay: p.mechDelay });
+  }
+
+  /**
+   * Toca uma gravacao pela MESMA cadeia do som sintetizado — panner e envio de
+   * ambiente. E' o que faz o tiro gravado pertencer a` arena em vez de soar
+   * como um aviso de interface colado por cima.
+   */
+  private playSample(takes: AudioBuffer[], p: ShotProfile, at?: SoundPos): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    // A sala ja' vem gravada na amostra: mandar o mesmo envio do sintetizado
+    // empilha ambiente em cima de ambiente. E nada de saturacao — a gravacao
+    // ja' tem a dela.
+    const out = this.output({ at, reverb: p.reverb * 0.35 });
+    if (!out) return;
+
+    const src = ctx.createBufferSource();
+    src.buffer = takes[Math.floor(Math.random() * takes.length)];
+    // Sem isto, doze disparos por segundo da mesma amostra viram zumbido.
+    src.playbackRate.value = randRange(0.96, 1.04);
+    const gain = ctx.createGain();
+    gain.gain.value = SAMPLE_GAIN;
+    src.connect(gain).connect(out);
+    src.start(this.now());
   }
 
   dryFire(): void {
