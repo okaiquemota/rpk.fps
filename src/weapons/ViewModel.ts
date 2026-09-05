@@ -9,8 +9,8 @@ interface Rig {
   flash: THREE.Mesh;
 }
 
-const HIP_POS = new THREE.Vector3(0.26, -0.2, -0.5);
-const ADS_POS = new THREE.Vector3(0, -0.115, -0.46);
+const HIP_POS = new THREE.Vector3(0.2, -0.16, -0.33);
+const ADS_POS = new THREE.Vector3(0, -0.1, -0.3);
 /** Angulo de 3/4 no quadril; some ao mirar, quando a arma alinha com a mira. */
 const HIP_YAW = -0.16;
 const HIP_PITCH = 0.05;

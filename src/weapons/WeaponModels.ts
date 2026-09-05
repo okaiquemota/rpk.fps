@@ -28,15 +28,24 @@ interface ModelSpec {
    * que cada arma e' trazida pro mesmo enquadramento.
    */
   offset: [number, number, number];
+  /**
+   * O pacote NAO e' uniforme: a maioria tem o cano no +X, mas a pistola e a
+   * submetralhadora vem com ele no -X. Sem inverter essas duas, elas apontam
+   * pras costas do jogador.
+   *
+   * Pra descobrir num modelo novo: fatie a peca ao longo do comprimento e veja
+   * de que lado a secao transversal e' mais FINA — a ponta fina e' o cano.
+   */
+  flipped: boolean;
 }
 
 const SPECS: Record<WeaponId, ModelSpec> = {
-  pistol: { url: pistolUrl, length: 0.22, offset: [-0.05, 0.02, 0.03] },
-  deagle: { url: deagleUrl, length: 0.26, offset: [-0.05, 0.02, 0.03] },
-  smg: { url: smgUrl, length: 0.38, offset: [-0.06, 0.03, 0.02] },
-  rifle: { url: rifleUrl, length: 0.55, offset: [-0.07, 0.035, 0.02] },
-  shotgun: { url: shotgunUrl, length: 0.58, offset: [-0.07, 0.035, 0.02] },
-  sniper: { url: sniperUrl, length: 0.7, offset: [-0.07, 0.04, 0.02] },
+  pistol: { url: pistolUrl, length: 0.26, offset: [-0.02, 0.01, 0.05], flipped: true },
+  deagle: { url: deagleUrl, length: 0.3, offset: [-0.02, 0.01, 0.05], flipped: false },
+  smg: { url: smgUrl, length: 0.44, offset: [-0.03, 0.02, 0.04], flipped: true },
+  rifle: { url: rifleUrl, length: 0.62, offset: [-0.04, 0.025, 0.03], flipped: false },
+  shotgun: { url: shotgunUrl, length: 0.66, offset: [-0.04, 0.025, 0.03], flipped: false },
+  sniper: { url: sniperUrl, length: 0.78, offset: [-0.04, 0.03, 0.03], flipped: false },
 };
 
 export interface WeaponModel {
@@ -76,12 +85,10 @@ function prepare(scene: THREE.Object3D, spec: ModelSpec): WeaponModel {
   const root = new THREE.Group();
   root.add(scene);
 
-  // O pacote deita as armas ao longo de X, com o cano pro lado POSITIVO — a
-  // caixa vai de -1.6 a +3.8 no fuzil, e a ponta longa e' o cano. Girar +90 em
-  // Y leva esse lado pra -Z, que e' pra onde a camera olha. Com -90 a arma
-  // apontava pras costas do jogador, o que so' aparece medindo: na tela, em
-  // perspectiva, os dois lados parecem plausiveis.
-  scene.rotation.y = Math.PI / 2;
+  // Leva o cano pra -Z, que e' pra onde a camera olha. O sinal muda por arma
+  // porque o pacote nao e' uniforme (ver `flipped`). Errar isso nao aparece na
+  // tela: em perspectiva, arma apontando pra frente e pra tras parecem iguais.
+  scene.rotation.y = spec.flipped ? -Math.PI / 2 : Math.PI / 2;
 
   // Escala derivada da peca de verdade, nao chutada.
   const raw = new THREE.Box3().setFromObject(root);

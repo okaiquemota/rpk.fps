@@ -53,11 +53,18 @@ A escala NAO e' um fator fixo: e' derivada de um comprimento alvo em metros
 (`SPECS`), medindo a caixa da peca. O pacote nao mantem proporcao real entre as
 armas, e um fator unico deixaria umas gigantes e outras minusculas.
 
-**Orientacao: `scene.rotation.y = +PI/2`.** Os modelos do Quaternius deitam a
-arma ao longo de X com o cano pro lado POSITIVO. Com `-PI/2` a arma aponta pras
-costas do jogador — e isso NAO da' pra ver na tela: em perspectiva os dois lados
-parecem plausiveis. Se precisar reconferir, meca a caixa: com a rotacao certa, a
-maior parte do comprimento fica em Z NEGATIVO.
+**Orientacao: o pacote NAO e' uniforme.** A maioria das armas deita ao longo de
+X com o cano no lado POSITIVO, mas a pistola e a submetralhadora vem com ele no
+NEGATIVO. Por isso cada entrada de `SPECS` tem `flipped`, e nao ha um giro unico
+pra todas.
+
+Errar isso NAO aparece na tela: em perspectiva, arma apontando pra frente e pra
+tras parecem igualmente plausiveis (perdi tres capturas achando que era
+enquadramento). Para descobrir num modelo novo, meca: fatie a peca ao longo do
+comprimento e compare a area da secao transversal nas duas pontas — a ponta FINA
+e' o cano. Confirme de lado, com a camera do viewmodel em (1.1, 0, 0) olhando
+pra origem; ali a direita da tela e' -Z, entao o cano tem que apontar pra
+direita.
 
 O enquadramento de cada arma sai do `offset` em `SPECS` (X pra dentro/fora, Y
 pra cima/baixo, Z pra perto/longe). Modelos sao mais longos que os rigs
