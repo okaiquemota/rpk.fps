@@ -17,6 +17,7 @@ import { ENEMY_DEFS, type EnemyKind } from '../enemies/EnemyTypes';
 import { ProjectileSystem } from '../enemies/Projectile';
 import { Effects } from '../fx/Effects';
 import { HUD } from '../ui/HUD';
+import { warmupWeaponIcons } from '../ui/weaponIcons';
 import { WorldMarkers } from '../ui/WorldMarkers';
 import { Minimap } from '../ui/Minimap';
 import { Compass } from '../ui/Compass';
@@ -223,6 +224,7 @@ export class Game {
     });
 
     this.warmupShaders();
+    warmupWeaponIcons();
 
     this.screens.hideLoading();
     this.screens.showStart();

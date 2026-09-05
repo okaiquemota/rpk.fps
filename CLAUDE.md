@@ -32,8 +32,8 @@ O `strict` está ligado, junto com `noUnusedLocals` e `noUnusedParameters`.
 - Balanceamento de arma: `WEAPON_DEFS`. De inimigo: `ENEMY_DEFS`. Do resto:
   `src/config.ts`.
 - Arma nova: entrada em `WEAPON_DEFS` (o item no chao e o desbloqueio saem do
-  `unlockWave` sozinhos), um `case` no `buildRig` do `ViewModel`, uma silhueta
-  em `weaponIcons.ts` e o timbre em `SHOT_SOUND` (`Game.ts`). Inclua o rig novo
+  `unlockWave` sozinhos), um `case` no `buildRig` do `ViewModel`, o icone
+  (regerado, ver abaixo) e o timbre em `SHOT_SOUND` (`Game.ts`). Inclua o rig novo
   no aquecimento — `setVisibleForWarmup` ja' mostra todos, entao basta existir.
 - HUD: `index.html` tem o markup, `src/ui/HUD.ts` os setters. Minimapa e bussola
   sao canvas proprios (`Minimap.ts`, `Compass.ts`).
@@ -73,6 +73,36 @@ procedurais, entao o angulo de 3/4 do quadril e' menor com eles
 
 Os `.glb` entram embutidos no bundle (`assetsInlineLimit` no `vite.config.ts`),
 o que mantem o build de arquivo unico sendo um arquivo so'.
+
+## Icones das armas no HUD
+
+As silhuetas de `src/ui/weaponIcons.ts` sao TRACADAS dos proprios `.glb`, nao
+desenhadas no olho. `scratchpad/traceIcons.html` renderiza cada modelo de lado
+em silhueta chapada, segue a fronteira dos pixels, simplifica o contorno e
+imprime o bloco pronto pra colar por cima do `SHAPES`. Rode com `npm run dev` e
+confira ali mesmo: a pagina mostra cada icone nos tres tamanhos em que ele
+aparece (118px do painel de municao, 46px do killfeed, e sobre fundo claro).
+
+Desenhar a mao nao funcionou: a versao anterior era uma pilha de retangulos, e
+com o contorno de 4px os vaos entre as pecas fechavam — todas as armas viravam
+o mesmo borrao branco no killfeed. Tracar do modelo conserta o desenho e ainda
+faz o icone ser a arma que o jogador tem na mao.
+
+O icone segue existindo sem os `.glb`: o que vai no bundle sao coordenadas, nao
+o modelo. Trocar um modelo NAO atualiza o icone sozinho — tem que regerar.
+
+Duas coisas que parecem detalhe e nao sao:
+
+- **A largura nao e' proporcional ao comprimento real.** E' comprimento^0.6.
+  Na proporcao real a pistola fica com 40px do lado do sniper e some no
+  killfeed; com fator unico, a escada de tamanhos desaparece.
+- **O contorno e' tracado ANTES do preenchimento**, e o preenchimento e'
+  `evenodd`. E' isso que deixa so' a metade de fora do traco aparecendo e, de
+  quebra, fecha o guarda-mato e o buraco da coronha do sniper.
+
+Os icones sao gerados no aquecimento (`warmupWeaponIcons`), pelo mesmo motivo
+dos shaders: sao ~1ms cada, e sob demanda esse custo cai na primeira troca de
+arma, no meio da partida.
 
 ## Modos
 

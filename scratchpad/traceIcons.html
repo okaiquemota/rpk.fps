@@ -1,0 +1,251 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>gerador dos icones de arma</title>
+<!--
+  Gera as silhuetas de `src/ui/weaponIcons.ts` a partir dos .glb das armas.
+
+  Desenhar icone de arma no olho nao funciona: a primeira versao era uma pilha
+  de retangulos que virava um borrao branco no killfeed, porque o contorno de
+  4px fechava os vaos entre as pecas. Tracar do modelo resolve os dois lados —
+  o desenho fica certo e o icone passa a ser a arma que o jogador tem na mao.
+
+  Como usar: `npm run dev`, abra /scratchpad/traceIcons.html, confira as
+  silhuetas e cole o bloco impresso no fim por cima do `SHAPES` do
+  weaponIcons.ts. Depois de trocar um modelo, repita.
+-->
+<style>
+  body { margin: 0; background: #16191f; color: #98a2b3; font: 12px ui-monospace, monospace; }
+  h2 { font-size: 12px; letter-spacing: 3px; color: #ff9d2e; margin: 18px 10px 6px; }
+  .row { display: flex; align-items: center; gap: 14px; padding: 5px 10px; border-bottom: 1px solid #262b33; }
+  .row b { width: 74px; letter-spacing: 2px; color: #d0d5dd; font-weight: 400; }
+  .row canvas, .row img { background: repeating-conic-gradient(#22262d 0 25%, #2b313a 0 50%) 0 / 14px 14px; }
+  .kf { width: 46px; }
+  .light { background: #c9cdd4; padding: 2px; }
+  pre { margin: 0; padding: 10px; white-space: pre; overflow-x: auto; color: #cbd5e1; font-size: 11px; line-height: 1.45; }
+</style>
+<h2>SILHUETA DO MODELO &rarr; ICONE (396px / 118px do HUD / 46px do killfeed / sobre fundo claro)</h2>
+<div id="out"></div>
+<h2>COLE ISTO NO SHAPES DE src/ui/weaponIcons.ts</h2>
+<pre id="code">tracando...</pre>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+const NAMES = ['pistol', 'deagle', 'smg', 'rifle', 'shotgun', 'sniper'];
+
+// O pacote nao e' uniforme: a pistola e a submetralhadora vem com o cano no -X.
+// Mesma tabela do SPECS em WeaponModels.ts.
+const FLIPPED = { pistol: true, smg: true };
+
+// Largura de cada arma no espaco do icone. NAO e' proporcional ao comprimento
+// real — a pistola ficaria com 40px do lado do sniper e sumiria no killfeed.
+// E' comprimento^0.6: mantem a escada de tamanhos sem achatar as diferencas.
+const TARGET_W = { pistol: 62, deagle: 66, smg: 89, rifle: 106, shotgun: 110, sniper: 126 };
+
+const DESIGN_W = 132;   // mesmas medidas do canvas em weaponIcons.ts
+const DESIGN_H = 44;
+const MAX_H = 36;       // sobra pro contorno nao encostar na borda
+const EPS = 0.8;        // simplificacao, em unidades de desenho
+const RES = 900;        // largura do render usado pra tracar
+
+const loader = new GLTFLoader();
+const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+
+/** Renderiza a arma de lado, chapada, e devolve a mascara binaria. */
+function silhouette(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3(); box.getSize(size);
+  const mid = new THREE.Vector3(); box.getCenter(mid);
+  const W = RES, H = Math.max(2, Math.round(RES / (size.z / size.y)));
+  renderer.setSize(W, H, false);
+
+  const scene = new THREE.Scene();
+  scene.add(obj);
+  // Depois do giro o comprimento da arma cai no eixo Z, entao a camera em +X
+  // olhando pra origem ve o perfil.
+  const cam = new THREE.OrthographicCamera(-size.z / 2, size.z / 2, size.y / 2, -size.y / 2, 0.01, 200);
+  cam.position.set(mid.x + size.x + 10, mid.y, mid.z);
+  cam.lookAt(mid.x, mid.y, mid.z);
+  renderer.render(scene, cam);
+
+  const gl = renderer.getContext();
+  const buf = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  const on = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {           // readPixels vem de baixo pra cima
+    for (let x = 0; x < W; x++) on[y * W + x] = buf[((H - 1 - y) * W + x) * 4 + 3] > 128 ? 1 : 0;
+  }
+  return { on, W, H };
+}
+
+/**
+ * Contornos por seguimento de aresta: pra cada pixel aceso, emite a aresta que
+ * faz fronteira com apagado, sempre com o interior a' direita. Assim tudo
+ * encadeia ponta a ponta em lacos fechados — o contorno de fora e o de cada
+ * buraco saem juntos, que e' o que o preenchimento evenodd precisa.
+ */
+function contours(on, W, H) {
+  const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H) ? 0 : on[y * W + x];
+  const segs = new Map();
+  const push = (a, b) => {
+    const k = a[0] + ',' + a[1];
+    let l = segs.get(k); if (!l) segs.set(k, l = []);
+    l.push(b);
+  };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!at(x, y)) continue;
+    if (!at(x, y - 1)) push([x, y], [x + 1, y]);
+    if (!at(x + 1, y)) push([x + 1, y], [x + 1, y + 1]);
+    if (!at(x, y + 1)) push([x + 1, y + 1], [x, y + 1]);
+    if (!at(x - 1, y)) push([x, y + 1], [x, y]);
+  }
+  const loops = [];
+  for (const [startKey, list] of segs) {
+    while (list.length) {
+      const start = startKey.split(',').map(Number);
+      const loop = [start];
+      let next = list.pop();
+      while (next && !(next[0] === start[0] && next[1] === start[1])) {
+        loop.push(next);
+        const l = segs.get(next[0] + ',' + next[1]);
+        next = l && l.length ? l.pop() : null;
+      }
+      if (loop.length > 6) loops.push(loop);
+    }
+  }
+  return loops;
+}
+
+function area(p) {
+  let a = 0;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) a += p[j][0] * p[i][1] - p[i][0] * p[j][1];
+  return Math.abs(a) / 2;
+}
+
+function rdp(pts, eps) {
+  if (pts.length < 3) return pts;
+  const [ax, ay] = pts[0], [bx, by] = pts[pts.length - 1];
+  const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+  let maxD = -1, idx = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = Math.abs((pts[i][0] - ax) * dy - (pts[i][1] - ay) * dx) / len;
+    if (d > maxD) { maxD = d; idx = i; }
+  }
+  if (maxD <= eps) return [pts[0], pts[pts.length - 1]];
+  return rdp(pts.slice(0, idx + 1), eps).slice(0, -1).concat(rdp(pts.slice(idx), eps));
+}
+
+/**
+ * RDP num laco fechado precisa de DOIS cortes. Com um so', o primeiro e o
+ * ultimo ponto sao o mesmo, a reta base tem comprimento zero, toda distancia
+ * perpendicular da' zero e o laco inteiro colapsa num ponto — foi o que
+ * aconteceu na primeira versao. Corta no ponto mais longe do centro e no mais
+ * longe DESSE, e simplifica as duas metades.
+ */
+function simplifyLoop(loop, eps) {
+  let cx = 0, cy = 0;
+  for (const p of loop) { cx += p[0]; cy += p[1]; }
+  cx /= loop.length; cy /= loop.length;
+  const farthestFrom = (px, py) => {
+    let idx = 0, best = -1;
+    for (let i = 0; i < loop.length; i++) {
+      const d = Math.hypot(loop[i][0] - px, loop[i][1] - py);
+      if (d > best) { best = d; idx = i; }
+    }
+    return idx;
+  };
+  const a = farthestFrom(cx, cy);
+  const b = farthestFrom(loop[a][0], loop[a][1]);
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  return rdp(loop.slice(lo, hi + 1), eps).slice(0, -1)
+    .concat(rdp(loop.slice(hi).concat(loop.slice(0, lo + 1)), eps).slice(0, -1));
+}
+
+/** Mesmo desenho do weaponIcons.ts, pra conferir o resultado antes de colar. */
+function paint(loops, scale) {
+  const c = document.createElement('canvas');
+  c.width = DESIGN_W * scale; c.height = DESIGN_H * scale;
+  const g = c.getContext('2d');
+  g.scale(scale, scale);
+  const path = new Path2D();
+  for (const loop of loops) {
+    path.moveTo(loop[0], loop[1]);
+    for (let i = 2; i < loop.length; i += 2) path.lineTo(loop[i], loop[i + 1]);
+    path.closePath();
+  }
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  g.strokeStyle = 'rgba(0, 0, 0, 0.85)'; g.lineWidth = 2.4;
+  g.stroke(path);
+  g.fillStyle = '#f2f4f7';
+  g.fill(path, 'evenodd');
+  return c;
+}
+
+function emit(name, loops) {
+  let s = `  ${name}: [\n`;
+  loops.forEach((loop, i) => {
+    const pares = [];
+    for (let k = 0; k < loop.length; k += 2) pares.push(`${loop[k]}, ${loop[k + 1]}`);
+    const linhas = [];
+    let cur = '';
+    for (const par of pares) {
+      if (cur.length + par.length + 2 > 66) { linhas.push(cur); cur = ''; }
+      cur += (cur ? ', ' : '') + par;
+    }
+    if (cur) linhas.push(cur);
+    s += `    // ${i === 0 ? 'contorno' : 'vazado'}\n    [\n`;
+    s += linhas.map(l => `      ${l},`).join('\n') + '\n    ],\n';
+  });
+  return s + '  ],\n';
+}
+
+const out = document.getElementById('out');
+let code = '';
+
+for (const name of NAMES) {
+  const gltf = await loader.loadAsync(`/assets/models/${name}.glb`);
+  const obj = gltf.scene;
+  obj.rotation.y = FLIPPED[name] ? -Math.PI / 2 : Math.PI / 2;
+  // Chapa tudo em branco: o que interessa e' o contorno, nao o material.
+  obj.traverse(o => { if (o.isMesh) o.material = new THREE.MeshBasicMaterial({ color: 0xffffff }); });
+  obj.updateMatrixWorld(true);
+
+  const { on, W, H } = silhouette(obj);
+  const modelo = renderer.domElement.toDataURL('image/png');
+
+  const grandes = contours(on, W, H)
+    .filter(l => area(l) > W * H * 0.0012)   // corta ruido de um pixel
+    .sort((a, b) => area(b) - area(a));      // contorno primeiro, buracos depois
+
+  const s = Math.min(TARGET_W[name] / W, MAX_H / H);
+  const x0 = (DESIGN_W - W * s) / 2;
+  const y0 = (DESIGN_H - H * s) / 2;
+  const loops = grandes.map(l => {
+    const flat = [];
+    for (const [x, y] of simplifyLoop(l, EPS / s)) {
+      flat.push(+(x0 + x * s).toFixed(1), +(y0 + y * s).toFixed(1));
+    }
+    return flat;
+  }).filter(f => f.length >= 8);
+
+  const pontos = loops.reduce((n, l) => n + l.length / 2, 0);
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `<b>${name}</b><img src="${modelo}" height="60" />`;
+  row.append(paint(loops, 3), Object.assign(paint(loops, 3), { className: 'kf' }));
+  const claro = document.createElement('span');
+  claro.className = 'light';
+  claro.append(Object.assign(paint(loops, 3), { className: 'kf' }));
+  const nota = document.createElement('span');
+  nota.textContent = `${loops.length} lacos, ${pontos} pontos`;
+  row.append(claro, nota);
+  row.querySelector('canvas').style.width = '396px';
+  out.appendChild(row);
+
+  code += emit(name, loops);
+}
+
+document.getElementById('code').textContent = code.trimEnd();
+window.__ready = true;
+</script>
