@@ -9,12 +9,14 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
-    "build:single": "npm run build && node scripts/build-single.mjs"
+    "build:single": "tsc --noEmit && node scripts/build-single.mjs",
+    "assets": "node scripts/asset-report.mjs"
   },
   "dependencies": {
     "three": "^0.185.1"
   },
   "devDependencies": {
+    "@types/node": "^26.4.1",
     "@types/three": "^0.185.4",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"

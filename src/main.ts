@@ -1,5 +1,7 @@
 import { Game } from './core/Game';
 import { loadWeaponModels } from './weapons/WeaponModels';
+import { createRenderer } from './core/gpu';
+import { enableCompressedTextures } from './core/gltf';
 
 const canvas = document.getElementById('viewport') as HTMLCanvasElement | null;
 
@@ -24,10 +26,17 @@ if (!supportsWebGL()) {
     '<div><h1>WebGL indisponivel</h1><p style="opacity:.6;margin-top:12px">' +
     'Este navegador nao consegue rodar o jogo. Tente ativar a aceleracao de hardware.</p></div></div>';
 } else {
-  // Os modelos entram ANTES do jogo existir: assim o aquecimento de shaders
-  // cobre os materiais deles, e nada compila no meio da partida.
+  // A ordem aqui nao e' arbitraria, e as tres etapas dependem uma da outra:
+  //
+  // 1. O renderer nasce primeiro porque so' ele sabe quais formatos de textura
+  //    comprimida esta GPU aceita;
+  // 2. os modelos entram antes do jogo, pra que o aquecimento de shaders cubra
+  //    os materiais deles e nada compile no meio da partida;
+  // 3. o jogo recebe os dois prontos.
+  const renderer = createRenderer(canvas);
+  enableCompressedTextures(renderer);
   const models = await loadWeaponModels();
-  const game = new Game(canvas, models);
+  const game = new Game(canvas, models, renderer);
 
   // Gancho de depuracao: no console do navegador da' pra bisbilhotar
   // o estado do jogo (`__RPK.player`, `__RPK.enemies`, ...).

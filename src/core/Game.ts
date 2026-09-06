@@ -20,7 +20,7 @@ import { HUD } from '../ui/HUD';
 import { warmupWeaponIcons } from '../ui/weaponIcons';
 import { WorldMarkers } from '../ui/WorldMarkers';
 import { PerfMeter } from '../ui/PerfMeter';
-import { detectRenderer } from './gpu';
+import { createRenderer } from './gpu';
 import { Minimap } from '../ui/Minimap';
 import { Compass } from '../ui/Compass';
 import { Screens, type Settings } from '../ui/Screens';
@@ -127,22 +127,27 @@ export class Game {
   private upgradeWave = 0;
   private wasInFallback = false;
 
-  constructor(canvas: HTMLCanvasElement, models: Map<WeaponId, WeaponModel> = new Map()) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    models: Map<WeaponId, WeaponModel> = new Map(),
+    renderer?: THREE.WebGLRenderer,
+  ) {
     this.viewModel = new ViewModel(models);
     // ---------- renderer ----------
-    // Sem GPU, cada amostra extra de suavizacao e' trabalho de CPU multiplicado
-    // pela tela inteira — e' dos custos mais caros que existem em software.
-    const gpu = detectRenderer();
-    this.renderer = new THREE.WebGLRenderer({
-      canvas, antialias: !gpu.software, powerPreference: 'high-performance',
-    });
+    // Vem pronto do `main.ts` quando existe: ele precisa nascer antes dos
+    // modelos, pra que o carregador saiba que texturas comprimidas esta GPU
+    // aceita (ver `core/gltf`). O caminho sem argumento continua valendo pra
+    // teste e pra quem instanciar o Game sozinho.
+    this.renderer = renderer ?? createRenderer(canvas);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
-    // Sombra dura entrega o mapa: a borda vira escada de texel e o objeto
-    // parece colado no chao. PCFSoft borra a borda com um punhado de amostras
-    // — e' custo por pixel, mas so' no que esta' em sombra.
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // NAO troque por PCFSoftShadowMap: no three r185 ele esta' DEPRECADO e cai
+    // em PCFShadowMap sozinho, avisando no console a cada atualizacao de sombra.
+    // Ja' foi trocado uma vez achando que amaciava a borda — nao mudou um pixel.
+    // Quem de fato amacia hoje e' VSMShadowMap, que traz vazamento de luz e faz
+    // todo receptor virar projetor: e' alavanca conhecida, nao melhoria de graca.
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;

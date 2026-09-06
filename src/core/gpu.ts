@@ -15,6 +15,8 @@
  *
  * Detecta uma vez so': cada chamada criaria um contexto WebGL descartavel.
  */
+import * as THREE from 'three';
+
 interface RendererInfo {
   /** Nome legivel do renderizador, pra mostrar no F3. */
   nome: string;
@@ -44,4 +46,23 @@ export function detectRenderer(): RendererInfo {
     cache = { nome: 'desconhecida', software: false };
   }
   return cache;
+}
+
+/**
+ * Cria o renderer do jogo.
+ *
+ * Mora aqui, e nao no `Game`, porque precisa existir ANTES dele: os modelos sao
+ * carregados antes do jogo (o aquecimento de shaders precisa dos materiais
+ * deles), e textura comprimida so' pode ser decodificada depois que o
+ * `KTX2Loader` souber o que esta GPU aceita — o que exige um renderer.
+ *
+ * Sem GPU, cada amostra extra de suavizacao e' trabalho de CPU multiplicado
+ * pela tela inteira: e' dos custos mais caros que existem em software.
+ */
+export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+  return new THREE.WebGLRenderer({
+    canvas,
+    antialias: !detectRenderer().software,
+    powerPreference: 'high-performance',
+  });
 }

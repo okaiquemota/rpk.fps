@@ -51,11 +51,10 @@ o jogo espacializa o som sozinho.
 Entao: use wav se e' o que voce tem. Corte curto, deixe mono, e so' converta pra
 ogg/mp3 se for por muitas tomadas por arma.
 
-**Limite duro: 600 KB por arquivo.** Acima disso o Vite para de embutir
-(`assetsInlineLimit` no `vite.config.ts`) e o arquivo vira um asset separado —
-o build de arquivo unico deixa de conter o som, silenciosamente. Em wav mono
-44.1k isso da' quase 7 segundos, entao tiro nao chega perto; um som de recarga
-comprido, talvez.
+**Nao ha mais limite duro de tamanho.** O build normal (que e' o que o site
+publica) emite cada som como arquivo separado, sem teto. O que ainda vale e'
+bom senso: som longo ou estereo pesa no build de arquivo unico, onde tudo entra
+em base64. Rode `npm run assets` pra ver o custo de cada um nos dois casos.
 
 ## Corte o silencio do comeco
 

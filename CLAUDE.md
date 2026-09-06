@@ -97,8 +97,61 @@ escolher o fator de aproximacao e conferir a visada. Modelos sao mais longos que
 procedurais, entao o angulo de 3/4 do quadril e' menor com eles
 (`MODEL_HIP_YAW`/`MODEL_HIP_PITCH` no `ViewModel`).
 
-Os `.glb` entram embutidos no bundle (`assetsInlineLimit` no `vite.config.ts`),
-o que mantem o build de arquivo unico sendo um arquivo so'.
+Nao ha mais teto de tamanho pra modelo: no build normal ele sai como arquivo
+separado (ver "Dois builds", abaixo). `npm run assets` diz quanto cada um pesa.
+
+## Dois builds, e por que a diferenca importa
+
+O jogo tem DUAS saidas, e confundi-las ja' custou caro:
+
+- **`npm run build`** — a pasta `dist/` inteira, com os assets como arquivos
+  separados. **E' isto que o GitHub Pages publica** (ver `.github/workflows/`).
+  Nao ha limite de tamanho aqui: modelo pesado e' so' mais um arquivo, com cache
+  proprio, baixado quando precisa.
+- **`npm run build:single`** — `dist/rpk-fps.html`, com TUDO embutido em base64.
+  E' um extra, pra baixar e jogar offline com duplo clique, e e' tambem o
+  formato do link de previa. Nao e' o deploy.
+
+O limite de embutir era 600 KB **pros dois**, e estava moldando decisao de asset
+que nao precisava ser moldada: modelo, textura e som eram escolhidos pra caber
+num arquivo avulso que nem e' como o jogo e' servido. Hoje o `assetsInlineLimit`
+e' uma funcao que responde diferente por modo — 4 KB no normal, tudo no `single`.
+
+**O modo `single` FALHA em vez de sair quebrado.** A versao anterior pegava um
+`.js` e um `.css` e ignorava o resto: asset que nao coubesse, ou divisao de
+codigo, viravam referencia pra arquivo inexistente. O HTML saia "pronto" e o que
+faltava sumia calado — arma voltando pro rig procedural, som que nunca toca. Um
+build quebrado tem que doer no build.
+
+`npm run assets` lista o peso de cada asset nos dois mundos, com o custo de
+base64 ja' somado.
+
+### Modelo comprimido
+
+`src/core/gltf.ts` e' o carregador de glTF do projeto — um so', pra arma,
+personagem e o que vier. Ele ja' abre modelo comprimido:
+
+- **meshopt** (geometria) vai EMBUTIDO: o decodificador do three e' um modulo JS
+  com o wasm em base64 dentro, entao funciona ate' no arquivo unico. **E' a
+  compressao a preferir.**
+- **Draco** (geometria) e **KTX2/Basis** (textura) sao wasm carregado por URL,
+  ~1.5 MB, baixado so' quando um `.glb` de fato usa a extensao.
+
+**Nao chame `setDecoderPath` nem `setTranscoderPath`.** O three r185 aponta pros
+decodificadores com `new URL(..., import.meta.url)`, padrao que o Vite entende:
+ele emite os arquivos e reescreve a URL sozinho. Um caminho fixo desliga essa
+resolucao e passa a exigir copia manual do wasm. (Uma versao deste projeto
+chegou a ter um plugin de Vite copiando essas pastas do `node_modules` — era
+redundante e duplicava 1.5 MB no `dist/`.)
+
+Como Draco e KTX2 sao externos, **modelo comprimido assim nao funciona no
+arquivo unico**, so' no site. O `build:single` avisa isso na saida.
+
+**A ordem de inicializacao em `main.ts` nao e' arbitraria:** o renderer nasce
+primeiro (so' ele sabe que formatos de textura comprimida a GPU aceita, e o
+`KTX2Loader` precisa disso ANTES de abrir qualquer modelo), depois os modelos
+(pro aquecimento de shaders cobrir os materiais deles), e o `Game` recebe os
+dois prontos.
 
 ## Icones das armas no HUD
 
@@ -152,9 +205,7 @@ KB pra 96 KB. Meça com `scratchpad/somDoTiro.html`, que diz em quantos ms o som
 comeca. As regras de formato, tamanho e licenca estao em
 `assets/sounds/README.md` — a curta: **wav serve** (todo navegador decodifica), e
 a escolha de formato e' de tamanho, nao de suporte. Seis wav curtos e mono custam
-uns 350 KB num bundle de 1.4 MB. O que pesa e' wav longo ou estereo. Limite duro:
-600 KB por arquivo, senao o Vite para de embutir e o build de arquivo unico perde
-o som sem avisar.
+uns 350 KB. O que pesa e' wav longo ou estereo.
 
 Duas decisoes que nao sao obvias:
 
@@ -282,9 +333,16 @@ Custo medido do conjunto (passe do mundo, mesma cena e mesma camera):
 
 Nada disso e' o que decide o fps: desenho e triangulo nao mudaram (os 496
 triangulos a mais sao a esfera do ceu com mais segmentos). O custo real e' POR
-PIXEL — duas buscas de textura a mais por pixel nos materiais do mundo, e o
-PCFSoft com mais amostras que o PCF. **Isso nao da' pra medir aqui** (ver
-Desempenho): so' com o F3 numa maquina com GPU.
+PIXEL — duas buscas de textura a mais por pixel nos materiais do mundo. **Isso
+nao da' pra medir aqui** (ver Desempenho): so' com o F3 numa maquina com GPU.
+
+**`PCFSoftShadowMap` nao existe mais.** No three r185 ele e' deprecado e cai em
+`PCFShadowMap` sozinho, avisando no console a cada atualizacao de sombra. Foi
+trocado aqui uma vez achando que amaciava a borda: nao mudou um pixel, so'
+poluiu o log — e ninguem percebeu porque sombra macia e sombra dura parecem as
+duas plausiveis numa captura. Quem amacia hoje e' `VSMShadowMap`, que traz
+vazamento de luz e faz TODO receptor virar projetor tambem; e' alavanca
+conhecida, com preco, nao melhoria de graca.
 
 Sobre repeticao: mancha grande e' o que mais denuncia uma textura tileada — a
 mesma bolha reaparecendo em catorze painels le' como padrao, enquanto grao fino

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from '../core/gltf';
 import type { WeaponId } from './WeaponDefs';
 
 import pistolUrl from '../../assets/models/pistol.glb?url';
@@ -75,7 +75,8 @@ export interface WeaponModel {
  * os arquivos, e permite trocar uma arma de cada vez.
  */
 export async function loadWeaponModels(): Promise<Map<WeaponId, WeaponModel>> {
-  const loader = new GLTFLoader();
+  // Carregador compartilhado: ja' sabe abrir modelo comprimido (ver core/gltf).
+  const loader = gltfLoader();
   const out = new Map<WeaponId, WeaponModel>();
 
   const jobs = (Object.entries(SPECS) as [WeaponId, ModelSpec][]).map(
