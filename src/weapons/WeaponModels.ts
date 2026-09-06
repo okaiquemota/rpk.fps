@@ -53,7 +53,7 @@ const SPECS: Record<WeaponId, ModelSpec> = {
   deagle: { url: deagleUrl, length: 0.3, offset: [-0.02, 0.01, 0.05], adsOffset: [0, 0, 0], flipped: false },
   smg: { url: smgUrl, length: 0.44, offset: [-0.03, 0.02, 0.04], adsOffset: [0, 0, 0], flipped: true },
   // Fuzil: o unico calibrado ate' agora, no quadril e na mira.
-  rifle: { url: rifleUrl, length: 0.62, offset: [-0.04, 0.025, 0.1], adsOffset: [0.04, -0.012, -0.14], flipped: false },
+  rifle: { url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.278], adsOffset: [0.12, -0.079, -0.13], flipped: false },
   shotgun: { url: shotgunUrl, length: 0.66, offset: [-0.04, 0.025, 0.03], adsOffset: [0, 0, 0], flipped: false },
   sniper: { url: sniperUrl, length: 0.78, offset: [-0.04, 0.03, 0.03], adsOffset: [0, 0, 0], flipped: false },
 };
