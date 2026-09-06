@@ -198,6 +198,94 @@ O que decide a leitura, em ordem de impacto:
 - **Sol baixo.** Sombra longa e' o que faz um patio parecer patio; a pino, tudo
   achata.
 
+### Superficie: relevo e rugosidade saem do proprio albedo
+
+Cada textura entrega TRES mapas (`Surface` em `textures.ts`): cor, normal e
+rugosidade. Os dois ultimos nao sao desenhados — sao derivados da mesma imagem,
+separados por FREQUENCIA:
+
+- **detalhe fino vira RELEVO** (junta, nervura, ripa, rebite, brita): geometria
+  pequena demais pra modelar e grande demais pra ignorar;
+- **mancha larga vira RUGOSIDADE** (oleo, ferrugem escorrida, sujeira no pe' da
+  parede): e' sujeira SOBRE a superficie, nao forma dela.
+
+Quem separa e' um passa-alta — tira do sinal a versao borrada dele mesmo. Sem
+essa separacao a mancha entra no mapa de normal e vira um calombo de meio metro
+no meio da parede.
+
+Isso e' o que mais mudou a leitura da arena. Antes toda peca era cor chapada com
+uma rugosidade fixa: a nervura do contentor era DESENHO, entao a luz passava por
+ela sem reagir, e andar em volta nao mudava nada. Agora a mesma nervura acende
+de um lado e sombreia do outro.
+
+Duas armadilhas medidas:
+
+- **Ganho demais e' pior que de menos.** O gradiente do passa-alta e' fraco
+  (+-0.15) e precisa de ganho, mas com `k = 14` o rebite da chapa virava meia
+  bola e a peca lia como plastico estofado. Esta' em 6.
+- **O sinal do eixo Y do mapa de normal nao aparece na tela.** Invertido, relevo
+  vira afundado e as duas leituras parecem plausiveis — o mesmo tipo de erro
+  silencioso do `flipped` das armas. O jeito de conferir NAO e' olhar: e' seguir
+  o que a textura desenha. No engradado a ripa leva risco escuro em cima do vao
+  e claro embaixo, que e' luz vindo de CIMA; entao no vao a normal tem que
+  apontar pra cima, e e' isso que a conta precisa devolver.
+
+Com mapa de rugosidade, o numero `roughness` do material vira MULTIPLICADOR do
+mapa, nao um valor: fica em 1 e quem manda e' a textura. O que sobra por
+material e' o `metalness`, que o mapa nao tem como saber — madeira, concreto e
+chapa reagem diferente com a mesma aspereza.
+
+Depois do relevo, a cor saturada que compensava a superficie chapada passou a
+brigar com ela (o engradado lia como pinho de brinquedo). Os tons foram
+dessaturados — madeira exposta ao tempo perde croma antes de perder valor.
+
+### Luz: um sol so', e o ceu como environment
+
+`SUN_DIR` (`Level.ts`) e' a UNICA fonte da direcao do sol: a luz direcional, o
+disco no ceu e o environment map leem dali. Separados, o ceu mostrava o sol num
+canto enquanto a sombra caia pro outro — ninguem estranha de imediato, so' fica
+com cara de cenario falso.
+
+O environment map vem do PROPRIO ceu, via PMREM da esfera do `buildSky`. Antes
+vinha de um `RoomEnvironment`: uma sala fechada, entao toda chapa e todo
+contentor do patio ao sol refletia um interior que nao existe no jogo — cinza de
+estudio no lugar de azul em cima e chao quente embaixo.
+
+**Trocar o environment obriga a mexer na hemisferica.** As duas fazem a MESMA
+conta: luz do ceu em cima, quique do chao embaixo. Somando as duas inteiras, a
+arena ficou clara e azulada e perdeu o patio ao sol. A hemisferica caiu de 2.4
+pra 1.1. A CONTAGEM de luzes nao muda — so' o peso.
+
+**A arma tambem e' iluminada pelo sol do mundo.** A cena da arma e' separada, e
+com luz fixa ela tinha sempre o mesmo lado aceso: de frente pro sol ou de
+costas, o cano brilhava igual. Hoje `SUN_DIR` e' transportado pro espaco da
+camera a cada quadro (`armaKey`), entao virar de costas pro sol escurece a arma
+e deixa so' o fio de luz na quina. Custa uma rotacao de vetor por quadro.
+
+**A nevoa comecava perto demais.** Com `fogNear` em 38 m numa arena de 62, ela
+pegava o patio inteiro: o muro do fundo chegava lavado e o contraste do meio ia
+junto. Num patio de 60 m em dia claro nao ha' bruma nenhuma pra ver — ela existe
+aqui so' pra amaciar o encontro do muro com o ceu. Esta' em 58/210.
+
+A anisotropia vem do maximo do hardware (`setMaxAnisotropy`), e precisa ser
+definida ANTES de `new Level()`: as texturas nascem no construtor dele.
+
+Custo medido do conjunto (passe do mundo, mesma cena e mesma camera):
+
+| | antes | depois |
+|---|---|---|
+| desenhos | 72 | 72 |
+| triangulos | 1538 | 2034 |
+| programas | 15 | 21 |
+| texturas | 10 | 20 |
+| CPU do `update` | 0.119 ms | 0.154 ms |
+
+Nada disso e' o que decide o fps: desenho e triangulo nao mudaram (os 496
+triangulos a mais sao a esfera do ceu com mais segmentos). O custo real e' POR
+PIXEL — duas buscas de textura a mais por pixel nos materiais do mundo, e o
+PCFSoft com mais amostras que o PCF. **Isso nao da' pra medir aqui** (ver
+Desempenho): so' com o F3 numa maquina com GPU.
+
 Sobre repeticao: mancha grande e' o que mais denuncia uma textura tileada — a
 mesma bolha reaparecendo em catorze painels le' como padrao, enquanto grao fino
 e ruido nao. Por isso o muro leva mancha fraca e ferrugem discreta, e o

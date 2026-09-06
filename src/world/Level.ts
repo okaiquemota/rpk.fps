@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { AABB, distanceToBoxXZ, randRange, rayAABB } from '../core/math';
 import { WORLD } from '../config';
+import type { Surface } from './textures';
 import { containerTexture, crateTexture, floorTexture, scaleBoxUVs, steelTexture, wallTexture } from './textures';
 
 const _losDir = new THREE.Vector3();
@@ -16,6 +17,14 @@ interface BlockSpec {
  * A geometria visual e a fisica saem da MESMA lista de blocos — impossivel
  * o mundo desenhado divergir do mundo que colide.
  */
+/**
+ * De onde vem o sol. UM lugar so': a luz direcional, o disco no ceu e o
+ * environment map leem daqui. Separados, o ceu mostrava o sol num canto
+ * enquanto a sombra caia pro outro — e ninguem estranha isso de imediato,
+ * so' fica com cara de cenario falso.
+ */
+export const SUN_DIR = new THREE.Vector3(34, 30, 20).normalize();
+
 export class Level {
   readonly group = new THREE.Group();
   /**
@@ -36,6 +45,13 @@ export class Level {
   readonly spawnPoints: THREE.Vector3[] = [];
   readonly playerStart = new THREE.Vector3(0, 0, 18);
   readonly size = WORLD.arenaSize;
+
+  /**
+   * A esfera do ceu. Fica exposta porque o environment map da cena e' gerado
+   * DELA: antes vinha de um `RoomEnvironment`, uma sala fechada, e todo metal
+   * do patio refletia um interior que nao existe em lugar nenhum do jogo.
+   */
+  sky!: THREE.Mesh;
 
   private materials: THREE.Material[] = [];
   private geometries: THREE.BufferGeometry[] = [];
@@ -61,7 +77,7 @@ export class Level {
     // Dia claro com bruma quente no horizonte, nao noite. O ceu ocupa a faixa
     // toda acima do muro: escuro ali, a arena inteira le' como galpao fechado,
     // por mais que o chao esteja iluminado.
-    const geo = new THREE.SphereGeometry(180, 24, 16);
+    const geo = new THREE.SphereGeometry(180, 32, 20);
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
@@ -70,6 +86,8 @@ export class Level {
         topColor: { value: new THREE.Color(0x3d6fa8) },
         horizonColor: { value: new THREE.Color(0xb8a888) },
         groundColor: { value: new THREE.Color(0x6b5c48) },
+        sunColor: { value: new THREE.Color(0xfff4de) },
+        sunDir: { value: SUN_DIR.clone() },
       },
       vertexShader: `
         varying vec3 vWorld;
@@ -81,12 +99,35 @@ export class Level {
         uniform vec3 topColor;
         uniform vec3 horizonColor;
         uniform vec3 groundColor;
+        uniform vec3 sunColor;
+        uniform vec3 sunDir;
         varying vec3 vWorld;
         void main() {
-          float h = normalize(vWorld).y;
+          vec3 d = normalize(vWorld);
+          float h = d.y;
+
+          // A faixa de bruma e' ESTREITA. Com uma rampa reta ate' o topo, o azul
+          // sobe devagar demais e o ceu inteiro fica leitoso — que era o efeito
+          // de "coberto" que a arena tinha antes. A exponencial concentra a
+          // bruma nos primeiros graus acima do horizonte, como no ceu de verdade.
+          float t = 1.0 - exp(-3.4 * max(h, 0.0));
           vec3 c = h > 0.0
-            ? mix(horizonColor, topColor, pow(h, 1.1))
+            ? mix(horizonColor, topColor, t)
             : mix(horizonColor, groundColor, pow(-h, 0.5));
+
+          float cosSol = dot(d, sunDir);
+
+          // O horizonte esquenta perto do azimute do sol. Sem isso a bruma tem a
+          // mesma cor nos 360 graus, e o ceu le' como gradiente, nao como ar.
+          float perto = max(dot(normalize(vec3(d.x, 0.0, d.z)),
+                                normalize(vec3(sunDir.x, 0.0, sunDir.z))), 0.0);
+          c = mix(c, c * vec3(1.16, 1.06, 0.92), pow(perto, 3.0) * (1.0 - t) * 0.9);
+
+          // Halo largo e disco. O disco entra com borda suave: recortado, ele
+          // vira serrilha do tamanho do pixel quando a camera gira.
+          c += sunColor * pow(max(cosSol, 0.0), 220.0) * 0.55;
+          c += sunColor * smoothstep(0.9994, 0.9998, cosSol) * 3.2;
+
           gl_FragColor = vec4(c, 1.0);
           // Um ShaderMaterial cru nao ganha essas etapas de graca: sem elas a cor
           // linear vai direto pro framebuffer sRGB e o ceu sai quase preto.
@@ -96,6 +137,7 @@ export class Level {
     });
     const sky = new THREE.Mesh(geo, mat);
     sky.frustumCulled = false;
+    this.sky = sky;
     this.group.add(sky);
     this.geometries.push(geo);
     this.materials.push(mat);
@@ -103,12 +145,18 @@ export class Level {
 
   private buildFloor(): void {
     const half = this.size / 2;
-    const tex = floorTexture();
-    this.textures.push(tex);
+    const sup = floorTexture();
+    this.textures.push(...sup.all);
 
     const geo = new THREE.PlaneGeometry(this.size, this.size);
     geo.rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92, metalness: 0.05 });
+    const mat = new THREE.MeshStandardMaterial({
+      map: sup.map, normalMap: sup.normalMap, roughnessMap: sup.roughnessMap,
+      // Com mapa de rugosidade, o numero aqui vira MULTIPLICADOR do mapa, nao
+      // um valor fixo — 1 deixa o mapa mandar sozinho.
+      roughness: 1, metalness: 0.05,
+      normalScale: new THREE.Vector2(sup.relief, sup.relief),
+    });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     this.group.add(mesh);
@@ -126,9 +174,13 @@ export class Level {
     const half = this.size / 2;
     const h = WORLD.wallHeight;
     const t = 1.5;
-    const tex = wallTexture();
-    this.textures.push(tex);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.08 });
+    const sup = wallTexture();
+    this.textures.push(...sup.all);
+    const mat = new THREE.MeshStandardMaterial({
+      map: sup.map, normalMap: sup.normalMap, roughnessMap: sup.roughnessMap,
+      roughness: 1, metalness: 0.08,
+      normalScale: new THREE.Vector2(sup.relief, sup.relief),
+    });
     this.materials.push(mat);
 
     const walls: [number, number, number, number, number, number][] = [
@@ -212,16 +264,27 @@ export class Level {
       { x: -14, y: 0, z: -21, w: 2, h: 1.4, d: 6, color: C_CRATE },
     ];
 
-    // Um material por tipo (3 texturas no total) — barato pro renderer.
-    const kinds: [string, THREE.Texture, number, number][] = [
-      [C_CRATE, crateTexture('#8a6a3e'), 0.94, 0.02],
-      [C_METAL, steelTexture('#6d7076'), 0.62, 0.45],
-      [C_RUST, containerTexture('#9c4a2c'), 0.8, 0.25],
+    // Um material por tipo — barato pro renderer. A rugosidade agora vem do
+    // mapa; o que fica por material e' so' o quanto ele e' METAL, que o mapa
+    // nao tem como saber: madeira, concreto e chapa reagem diferente ao sol
+    // com a mesma aspereza.
+    const kinds: [string, Surface, number][] = [
+      // Tons dessaturados de proposito. Com o relevo novo a peca ja' tem
+      // variacao propria de luz, e a cor saturada que compensava a superficie
+      // chapada passou a brigar com ela: o engradado lia como pinho de
+      // brinquedo. Madeira exposta ao tempo perde croma antes de perder valor.
+      [C_CRATE, crateTexture('#7b6749'), 0.02],
+      [C_METAL, steelTexture('#6d7076'), 0.5],
+      [C_RUST, containerTexture('#8d4c33'), 0.35],
     ];
     const matByColor = new Map<string, THREE.MeshStandardMaterial>();
-    for (const [key, tex, roughness, metalness] of kinds) {
-      this.textures.push(tex);
-      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness, metalness });
+    for (const [key, sup, metalness] of kinds) {
+      this.textures.push(...sup.all);
+      const mat = new THREE.MeshStandardMaterial({
+        map: sup.map, normalMap: sup.normalMap, roughnessMap: sup.roughnessMap,
+        roughness: 1, metalness,
+        normalScale: new THREE.Vector2(sup.relief, sup.relief),
+      });
       this.materials.push(mat);
       matByColor.set(key, mat);
     }
@@ -245,13 +308,18 @@ export class Level {
     // three >= r155 usa intensidades fisicas: os valores sao ~PI vezes maiores
     // do que o antigo modo "legacy lights".
     // Ceu azul por cima, quique quente do concreto por baixo.
-    const hemi = new THREE.HemisphereLight(0x9fc0e8, 0x6b5a44, 2.4);
+    //
+    // Caiu de 2.4 pra 1.1 quando o environment map passou a vir do ceu de
+    // verdade: os dois fazem a MESMA conta — luz do ceu em cima, quique do chao
+    // embaixo. Somando os dois inteiros, a arena ficou clara e azulada e perdeu
+    // o patio ao sol. A contagem de luzes nao muda; so' o peso.
+    const hemi = new THREE.HemisphereLight(0x9fc0e8, 0x6b5a44, 1.1);
     this.group.add(hemi);
 
     // Sol baixo e quente: rasante da sombra mais longa, e sombra longa e' o que
     // faz um patio parecer patio. A pino, tudo achata.
     const sun = new THREE.DirectionalLight(0xffe6bd, 5.2);
-    sun.position.set(34, 30, 20);
+    sun.position.copy(SUN_DIR).multiplyScalar(52);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;

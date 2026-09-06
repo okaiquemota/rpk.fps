@@ -50,8 +50,13 @@ export const CAMERA = {
 export const WORLD = {
   arenaSize: 62, // lado da arena (metros)
   wallHeight: 9,
-  fogNear: 38,
-  fogFar: 165,
+  // Ar limpo perto, bruma so' no fundo. Comecando em 38 m numa arena de 62, a
+  // nevoa pegava o patio INTEIRO: o muro do fundo chegava lavado e o contraste
+  // do meio da arena ia junto. Num patio de 60 m em dia claro nao ha' bruma
+  // nenhuma pra ver — ela existe aqui so' pra amaciar o encontro do muro com o
+  // ceu, e pra isso basta pegar o ultimo terco.
+  fogNear: 58,
+  fogFar: 210,
   gravityProjectile: 0,
 } as const;
 

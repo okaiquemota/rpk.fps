@@ -21,13 +21,170 @@ function makeCanvas(size: number): [HTMLCanvasElement, CanvasRenderingContext2D]
   return [c, ctx];
 }
 
-function finish(canvas: HTMLCanvasElement, repeat: number, repeatY = repeat): THREE.Texture {
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(repeat, repeatY);
-  tex.anisotropy = 8;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+/**
+ * Albedo, relevo e rugosidade da mesma superficie.
+ *
+ * Antes cada textura era so' a cor, com uma rugosidade fixa por material. Sob
+ * um sol direcional isso le' como papelao pintado: a nervura do contentor e a
+ * junta do concreto sao DESENHO, entao a luz passa por elas sem reagir — vire a
+ * cabeca e a superficie nao muda. Com relevo, a mesma nervura acende de um lado
+ * e sombreia do outro conforme voce anda.
+ */
+export interface Surface {
+  map: THREE.Texture;
+  normalMap: THREE.Texture;
+  roughnessMap: THREE.Texture;
+  /** Quanto o relevo deve pesar (vai no `normalScale` do material). */
+  relief: number;
+  /** Todas as texturas juntas, pra quem precisa dar dispose. */
+  all: THREE.Texture[];
+}
+
+/** Quanto cada superficie reage a luz, e quao aspera ela chega a ficar. */
+interface ReliefSpec {
+  /** Peso do relevo no material. Nervura de chapa pede mais que concreto. */
+  relief: number;
+  /** Faixa de rugosidade: [mais liso, mais aspero]. */
+  rough: [number, number];
+}
+
+/** Amostra com volta: as texturas repetem, e o mapa derivado tem que emendar. */
+function wrap(i: number, n: number): number {
+  return i < 0 ? i + n : i >= n ? i - n : i;
+}
+
+/** Borrao separavel de caixa, com volta nas bordas. */
+function blur(src: Float32Array, n: number, radius: number): Float32Array {
+  const tmp = new Float32Array(n * n);
+  const out = new Float32Array(n * n);
+  const largura = radius * 2 + 1;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      let soma = 0;
+      for (let k = -radius; k <= radius; k++) soma += src[y * n + wrap(x + k, n)];
+      tmp[y * n + x] = soma / largura;
+    }
+  }
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      let soma = 0;
+      for (let k = -radius; k <= radius; k++) soma += tmp[wrap(y + k, n) * n + x];
+      out[y * n + x] = soma / largura;
+    }
+  }
+  return out;
+}
+
+/**
+ * Deriva relevo e rugosidade do proprio albedo, separando por FREQUENCIA.
+ *
+ * O detalhe fino — junta, nervura, ripa, rebite, brita — e' o que vira relevo:
+ * geometria pequena demais pra modelar e grande demais pra ignorar. A mancha
+ * larga — oleo, ferrugem escorrida, sujeira no pe' da parede — NAO e' relevo:
+ * e' sujeira sobre a superficie, e no mapa de normal viraria bolha, um calombo
+ * de meio metro no meio da parede. Quem separa os dois e' um passa-alta: tira
+ * do sinal a versao borrada dele mesmo e sobra exatamente o detalhe fino.
+ *
+ * A parte borrada nao se perde — vai pra RUGOSIDADE, que e' onde ela pertence.
+ * Ferrugem e poeira espalham a luz; tinta e chapa limpa refletem. E' isso que
+ * faz o brilho do sol andar em manchas pela peca em vez de cobrir tudo igual.
+ */
+function derive(canvas: HTMLCanvasElement, spec: ReliefSpec): [THREE.Texture, THREE.Texture] {
+  const n = canvas.width;
+  const ctx = canvas.getContext('2d')!;
+  const px = ctx.getImageData(0, 0, n, n).data;
+
+  const lum = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) {
+    lum[i] = (px[i * 4] * 0.299 + px[i * 4 + 1] * 0.587 + px[i * 4 + 2] * 0.114) / 255;
+  }
+  const largo = blur(lum, n, Math.max(2, Math.round(n / 16)));
+
+  // ---- relevo: so' o que sobra do passa-alta ----
+  const alt = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) alt[i] = lum[i] - largo[i];
+
+  const nrm = document.createElement('canvas');
+  nrm.width = nrm.height = n;
+  const nctx = nrm.getContext('2d')!;
+  const saida = nctx.createImageData(n, n);
+  // Forca do gradiente: o passa-alta vive perto de +-0.15, entao precisa de
+  // ganho pra virar uma inclinacao que a luz perceba. Ganho DEMAIS e' pior que
+  // de menos: com 14 o rebite da chapa virava meia bola e a peca lia como
+  // plastico estofado, nao como aco.
+  const k = 6;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const dx = alt[y * n + wrap(x + 1, n)] - alt[y * n + wrap(x - 1, n)];
+      // O canvas cresce pra BAIXO e a textura vai pro shader com flipY, entao a
+      // linha seguinte da imagem e' o V maior. Trocar este sinal nao quebra
+      // nada visivelmente — so' inverte relevo e afundado, e as duas leituras
+      // parecem plausiveis ate' comparar lado a lado.
+      const dy = alt[wrap(y + 1, n) * n + x] - alt[wrap(y - 1, n) * n + x];
+      // normal = normalize(-dh/du, -dh/dv, 1), com dh/dv = -dh/dlinha.
+      let vx = -dx * k, vy = dy * k;
+      const inv = 1 / Math.hypot(vx, vy, 1);
+      const i = (y * n + x) * 4;
+      saida.data[i] = (vx * inv * 0.5 + 0.5) * 255;
+      saida.data[i + 1] = (vy * inv * 0.5 + 0.5) * 255;
+      saida.data[i + 2] = (inv * 0.5 + 0.5) * 255;
+      saida.data[i + 3] = 255;
+    }
+  }
+  nctx.putImageData(saida, 0, 0);
+
+  // ---- rugosidade: a parte larga, normalizada e mapeada na faixa da peca ----
+  let min = 1, max = 0;
+  for (let i = 0; i < n * n; i++) {
+    if (largo[i] < min) min = largo[i];
+    if (largo[i] > max) max = largo[i];
+  }
+  const span = Math.max(1e-4, max - min);
+  const rug = document.createElement('canvas');
+  rug.width = rug.height = n;
+  const rctx = rug.getContext('2d')!;
+  const saidaR = rctx.createImageData(n, n);
+  const [liso, aspero] = spec.rough;
+  for (let i = 0; i < n * n; i++) {
+    // Escuro = sujo = aspero. Claro = tinta ou chapa viva = mais liso.
+    const t = 1 - (largo[i] - min) / span;
+    const v = (liso + (aspero - liso) * t) * 255;
+    saidaR.data[i * 4] = saidaR.data[i * 4 + 1] = saidaR.data[i * 4 + 2] = v;
+    saidaR.data[i * 4 + 3] = 255;
+  }
+  rctx.putImageData(saidaR, 0, 0);
+
+  return [new THREE.CanvasTexture(nrm), new THREE.CanvasTexture(rug)];
+}
+
+function finish(
+  canvas: HTMLCanvasElement,
+  repeat: number,
+  spec: ReliefSpec,
+  repeatY = repeat,
+): Surface {
+  const [normalMap, roughnessMap] = derive(canvas, spec);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+
+  // Relevo e rugosidade sao DADO, nao cor: passando por sRGB o valor sai
+  // torto e o relevo vira uma inclinacao que nao e' a que foi calculada.
+  for (const tex of [map, normalMap, roughnessMap]) {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeat, repeatY);
+    tex.anisotropy = maxAnisotropy;
+  }
+  return { map, normalMap, roughnessMap, relief: spec.relief, all: [map, normalMap, roughnessMap] };
+}
+
+/**
+ * Anisotropia: sem ela o chao esticando ate' o muro vira borrao, que e' a
+ * textura mais visivel do jogo. O maximo do hardware costuma ser 16; o valor
+ * chega pelo renderer, porque `capabilities` so' existe depois que ele nasce.
+ */
+let maxAnisotropy = 8;
+export function setMaxAnisotropy(v: number): void {
+  maxAnisotropy = Math.max(1, v);
 }
 
 /** Poeira e manchas em cinza. Mancha colorida briga com a luz do sol. */
@@ -58,7 +215,7 @@ function rustStreak(ctx: CanvasRenderingContext2D, x: number, y: number, len: nu
 }
 
 /** Laje de concreto do patio: junta funda, brita e manchas de oleo. */
-export function floorTexture(): THREE.Texture {
+export function floorTexture(): Surface {
   const S = 256;
   const [canvas, ctx] = makeCanvas(S);
   ctx.fillStyle = '#6f675a';
@@ -91,7 +248,8 @@ export function floorTexture(): THREE.Texture {
   ctx.lineWidth = 1.5;
   ctx.strokeRect(3.5, 3.5, S - 7, S - 7);
 
-  return finish(canvas, 22);
+  // Concreto: pouca variacao de brilho, aspero em toda parte.
+  return finish(canvas, 22, { relief: 0.75, rough: [0.76, 0.97] });
 }
 
 /**
@@ -107,7 +265,7 @@ export function floorTexture(): THREE.Texture {
  * textura, e repetida catorze vezes ao longo do muro denuncia a repeticao mais
  * do que qualquer outra coisa.
  */
-export function wallTexture(): THREE.Texture {
+export function wallTexture(): Surface {
   const S = 256;
   const [canvas, ctx] = makeCanvas(S);
   ctx.fillStyle = '#8a8175';
@@ -142,11 +300,12 @@ export function wallTexture(): THREE.Texture {
     rustStreak(ctx, 20 + Math.random() * (S - 40), 4, 14 + Math.random() * 26, 1 + Math.random() * 1.6);
   }
 
-  return finish(canvas, 1);
+  // Painel pre-moldado: junta funda, resto quase liso de relevo.
+  return finish(canvas, 1, { relief: 0.6, rough: [0.8, 0.98] });
 }
 
 /** Contentor de carga: nervura vertical, travessas e ferrugem. */
-export function containerTexture(tint: string): THREE.Texture {
+export function containerTexture(tint: string): Surface {
   const S = 128;
   const [canvas, ctx] = makeCanvas(S);
   ctx.fillStyle = tint;
@@ -178,11 +337,13 @@ export function containerTexture(tint: string): THREE.Texture {
   ctx.lineWidth = 5;
   ctx.strokeRect(0, 0, S, S);
 
-  return finish(canvas, 1);
+  // Contentor: a nervura e' o relevo mais forte da arena, e a ferrugem
+  // abre a maior faixa de rugosidade — chapa pintada brilha, ferrugem nao.
+  return finish(canvas, 1, { relief: 0.7, rough: [0.52, 0.94] });
 }
 
 /** Engradado de madeira: ripa horizontal, travessa em diagonal e cantoneira. */
-export function crateTexture(tint: string): THREE.Texture {
+export function crateTexture(tint: string): Surface {
   const S = 128;
   const [canvas, ctx] = makeCanvas(S);
   ctx.fillStyle = tint;
@@ -227,11 +388,12 @@ export function crateTexture(tint: string): THREE.Texture {
   ctx.lineWidth = 2;
   ctx.strokeRect(9, 9, S - 18, S - 18);
 
-  return finish(canvas, 1);
+  // Madeira: ripa e vao dao relevo, mas o brilho e' baixo em toda a peca.
+  return finish(canvas, 1, { relief: 0.7, rough: [0.84, 0.99] });
 }
 
 /** Chapa de aco pintada, com rebite — nucleo e plataformas. */
-export function steelTexture(tint: string): THREE.Texture {
+export function steelTexture(tint: string): Surface {
   const S = 128;
   const [canvas, ctx] = makeCanvas(S);
   ctx.fillStyle = tint;
@@ -261,7 +423,9 @@ export function steelTexture(tint: string): THREE.Texture {
   ctx.lineWidth = 6;
   ctx.strokeRect(0, 0, S, S);
 
-  return finish(canvas, 1);
+  // Chapa de aco: rebite em relevo e a maior variacao de brilho depois do
+  // contentor.
+  return finish(canvas, 1, { relief: 0.45, rough: [0.46, 0.9] });
 }
 
 /**

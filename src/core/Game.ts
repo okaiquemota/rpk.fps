@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { PLAYER, WORLD, FIREFIGHT, WAVES } from '../config';
 import { AABB, clamp, randRange } from './math';
 import { Input } from './Input';
 import { AudioManager } from './Audio';
-import { Level } from '../world/Level';
+import { Level, SUN_DIR } from '../world/Level';
+import { setMaxAnisotropy } from '../world/textures';
 import { PickupManager, type PickupKind } from '../world/Pickups';
 import { Player } from '../player/Player';
 import { ViewModel } from '../weapons/ViewModel';
@@ -47,6 +47,8 @@ const _muzzle = new THREE.Vector3();
 const _listenerFwd = new THREE.Vector3();
 const _listenerUp = new THREE.Vector3();
 const _bufSize = new THREE.Vector2();
+const _sol = new THREE.Vector3();
+const _giro = new THREE.Quaternion();
 /** A que distancia do olho o clarao e o tracer nascem, em metros. */
 const MUZZLE_WORLD_DISTANCE = 0.85;
 /** Uma linha explicando cada tempero de onda, na hora que ele aparece. */
@@ -87,6 +89,16 @@ export class Game {
   private hud = new HUD();
   private markers = new WorldMarkers();
   private minimap: Minimap;
+  /**
+   * A luz principal da cena da arma. Ela NAO fica parada: e' o sol do mundo
+   * transportado pro espaco da camera a cada quadro.
+   *
+   * Com luz fixa, a arma tem sempre o mesmo lado aceso — de frente pro sol ou
+   * de costas, o cano brilha igual. Nada nisso parece errado sozinho, e e'
+   * justamente por isso que entrega o cenario: o mundo inteiro reage ao sol
+   * menos a coisa que esta' na frente dos olhos o tempo todo.
+   */
+  private armaKey!: THREE.DirectionalLight;
   private compass = new Compass();
   private perf = new PerfMeter(document.getElementById('perf')!);
   private screens = new Screens();
@@ -127,7 +139,10 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Sombra dura entrega o mapa: a borda vira escada de texel e o objeto
+    // parece colado no chao. PCFSoft borra a borda com um punhado de amostras
+    // — e' custo por pixel, mas so' no que esta' em sombra.
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -137,18 +152,29 @@ export class Game {
     // parede do fundo recorta do ceu como adesivo.
     this.scene.fog = new THREE.Fog(0xaf9f83, WORLD.fogNear, WORLD.fogFar);
 
-    // Sem environment map, todo material metalico renderiza praticamente preto.
-    // O RoomEnvironment gera um em memoria, sem baixar HDRI nenhum.
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
-    this.scene.environment = this.envMap;
-    this.scene.environmentIntensity = 0.45;
-    this.viewScene.environment = this.envMap;
-    this.viewScene.environmentIntensity = 0.5;
-
     // ---------- mundo ----------
+    // A anisotropia precisa estar definida ANTES do Level: as texturas nascem
+    // no construtor dele. Sem ela o chao esticando ate' o muro vira borrao, e
+    // e' a maior superficie que o jogador olha o tempo todo.
+    setMaxAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
     this.level = new Level();
+
+    // Sem environment map, todo material metalico renderiza praticamente preto.
+    // O mapa sai do PROPRIO ceu do jogo, nao de um `RoomEnvironment`: aquele e'
+    // uma sala fechada, entao cada chapa e cada contentor do patio refletia um
+    // interior que nao existe aqui — cinza de estudio no lugar de azul em cima
+    // e chao quente embaixo. Refletindo o ceu certo, o metal passa a dizer que
+    // horas sao e onde o sol esta'.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const cenaCeu = new THREE.Scene();
+    cenaCeu.add(this.level.sky);
+    this.envMap = pmrem.fromScene(cenaCeu, 0, 1, 400).texture;
+    pmrem.dispose();
+    this.level.group.add(this.level.sky);   // devolve o ceu pra cena de verdade
+    this.scene.environment = this.envMap;
+    this.scene.environmentIntensity = 0.4;
+    this.viewScene.environment = this.envMap;
+    this.viewScene.environmentIntensity = 0.45;
     // As capsulas ejetadas precisam saber onde e' o chao pra parar em cima da
     // caixa certa, e nao atravessar tudo ate' o infinito.
     this.effects = new Effects((x, z, fromY) => this.level.groundHeightAt(x, z, fromY));
@@ -206,6 +232,7 @@ export class Game {
     this.viewScene.add(this.viewModel.group);
     this.viewScene.add(new THREE.AmbientLight(0xbfd0e8, 2.4));
     const keyLight = new THREE.DirectionalLight(0xfff2dd, 5.5);
+    this.armaKey = keyLight;
     keyLight.position.set(0.7, 1.1, 0.9);
     this.viewScene.add(keyLight);
     const rimLight = new THREE.DirectionalLight(0x7fb0ff, 2.2);
@@ -300,6 +327,11 @@ export class Game {
     this.renderer.compile(this.viewScene, this.viewCamera);
     this.renderer.clear();
     this.renderer.render(this.scene, this.player.camera);
+
+    // O sol do mundo, levado pro espaco da camera: a cena da arma vive ali, com
+    // a camera na origem olhando pra -Z. Vira a cabeca e a arma reage junto.
+    _sol.copy(SUN_DIR).applyQuaternion(_giro.copy(this.player.camera.quaternion).invert());
+    this.armaKey.position.copy(_sol).multiplyScalar(10);
     this.renderer.clearDepth();
     this.renderer.render(this.viewScene, this.viewCamera);
 
@@ -1006,6 +1038,11 @@ export class Game {
 
     this.renderer.clear();
     this.renderer.render(this.scene, this.player.camera);
+
+    // O sol do mundo, levado pro espaco da camera: a cena da arma vive ali, com
+    // a camera na origem olhando pra -Z. Vira a cabeca e a arma reage junto.
+    _sol.copy(SUN_DIR).applyQuaternion(_giro.copy(this.player.camera.quaternion).invert());
+    this.armaKey.position.copy(_sol).multiplyScalar(10);
 
     // A arma vai depois, com o depth buffer limpo: sempre por cima do mundo.
     if (this.state === 'playing') {
