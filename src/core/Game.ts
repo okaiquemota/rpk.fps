@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { PLAYER, WORLD, FIREFIGHT } from '../config';
+import { PLAYER, WORLD, FIREFIGHT, WAVES } from '../config';
 import { AABB, clamp, randRange } from './math';
 import { Input } from './Input';
 import { AudioManager } from './Audio';
@@ -110,6 +110,9 @@ export class Game {
   /** Confronto: segundos restantes, abates do time inimigo (suas mortes). */
   private roundTime = 0;
   private enemyScore = 0;
+  /** Ondas: conta pra abrir a melhoria. Negativo = nada pendente. */
+  private upgradeTimer = -1;
+  private upgradeWave = 0;
   private wasInFallback = false;
 
   constructor(canvas: HTMLCanvasElement, models: Map<WeaponId, WeaponModel> = new Map()) {
@@ -389,6 +392,7 @@ export class Game {
     this.deathTimer = 0;
     this.roundTime = FIREFIGHT.roundSeconds;
     this.enemyScore = 0;
+    this.upgradeTimer = -1;
     this.enemies.setSkirmish(mode === 'firefight' ? FIREFIGHT.aliveTarget : 0);
 
     this.range.reset();
@@ -584,7 +588,9 @@ export class Game {
     const bonus = index * 100;
     this.score += bonus;
     this.hud.showToast('ONDA LIMPA', `+${bonus} pontos`);
-    this.offerUpgrades(index);
+    // Agenda em vez de abrir: ver WAVES.upgradeDelay.
+    this.upgradeTimer = WAVES.upgradeDelay;
+    this.upgradeWave = index;
 
     // Recompensa de sobrevivencia: um kit no centro entre ondas.
     const spot = this.level.playerStart.clone().lerp(new THREE.Vector3(0, 0, 0), 0.5);
@@ -858,6 +864,21 @@ export class Game {
         this.state = 'menu';
         this.finishRun();
         return;
+      }
+    }
+
+    // Melhoria agendada: so' anda com o jogador vivo e em jogo. Morrer no
+    // intervalo cancela — abrir a escolha de melhoria por cima da tela de morte
+    // seria as duas ao mesmo tempo.
+    if (this.upgradeTimer >= 0) {
+      if (this.state !== 'playing' || !player.alive) {
+        this.upgradeTimer = -1;
+      } else {
+        this.upgradeTimer -= dt;
+        if (this.upgradeTimer <= 0) {
+          this.upgradeTimer = -1;
+          this.offerUpgrades(this.upgradeWave);
+        }
       }
     }
 

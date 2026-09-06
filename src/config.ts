@@ -73,6 +73,14 @@ export const WAVES = {
   spawnInterval: 0.85,
   healthPerWave: 0.09, // +9% de vida por onda
   speedPerWave: 0.022,
+  /**
+   * Espera entre matar o ultimo da onda e abrir a escolha de melhoria.
+   *
+   * Abrindo na hora, a tela cobre o proprio abate: o ultimo tiro, o tombo e o
+   * "ONDA LIMPA" acontecem atras do menu. Um respiro deixa a onda terminar em
+   * cena antes do jogo pausar.
+   */
+  upgradeDelay: 1.5,
 } as const;
 
 export const FX = {
