@@ -510,13 +510,29 @@ export class Game {
     const taken = [...this.player.upgradesTaken.entries()]
       .map(([id, count]) => ({ name: UPGRADES.find((u) => u.id === id)?.name ?? id, count }))
       .sort((a, b) => b.count - a.count);
+
+    // No confronto a partida acaba de tres jeitos, e so' um deles e' morrer.
+    // Sem isto, bater o alvo de abates anunciava "VOCE MORREU" pra quem tinha
+    // acabado de vencer — e o painel mostrava "ONDAS 1", que ali nao quer dizer
+    // nada. No lugar da onda vao os tombos, que e' o outro lado do placar.
+    const fim = this.mode === 'firefight'
+      ? {
+        titulo: this.kills >= FIREFIGHT.killTarget ? 'RODADA VENCIDA'
+          : this.kills > this.enemyScore ? 'TEMPO ESGOTADO — VOCE VENCEU'
+          : this.kills === this.enemyScore ? 'TEMPO ESGOTADO — EMPATE'
+          : 'TEMPO ESGOTADO — VOCE PERDEU',
+        vitoria: this.kills >= FIREFIGHT.killTarget || this.kills > this.enemyScore,
+        rotulo: 'TOMBOS',
+      }
+      : undefined;
+
     this.screens.showGameOver({
-      wave: Math.max(1, this.enemies.waveIndex),
+      wave: this.mode === 'firefight' ? this.enemyScore : Math.max(1, this.enemies.waveIndex),
       kills: this.kills,
       score: this.score,
       shotsFired: this.shotsFired,
       shotsHit: this.shotsHit,
-    }, taken);
+    }, taken, fim);
   }
 
   // ==================================================================

@@ -347,6 +347,7 @@ body.playing { cursor: none; }
 .panel h1 .dot { color: var(--accent); }
 .panel h2 { font-size: 34px; letter-spacing: 8px; margin-bottom: 22px; }
 .panel h2.dead { color: var(--danger); }
+.panel h2.won { color: var(--good); }
 .tagline { margin: 10px 0 28px; opacity: 0.55; font-size: 13px; letter-spacing: 1px; line-height: 1.7; }
 .hint { margin-top: 22px; font-size: 11px; opacity: 0.35; letter-spacing: 1px; }
 

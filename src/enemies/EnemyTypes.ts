@@ -84,7 +84,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     kind: 'soldier', name: 'SOLDADO',
     health: 55, speed: 3.6, attackRange: 22, attackCooldown: 1.05, windup: 0.34,
     damage: 9, radius: 0.4, height: 1.78, score: 150,
-    color: 0x555b46, gearColor: 0x2b2e26, eyeColor: 0xc9503a, ranged: true, projectileSpeed: 27,
+    color: 0x555b46, gearColor: 0x2b2e26, eyeColor: 0xc9503a, ranged: true, projectileSpeed: 48,
     dropChance: 0.2, minWave: 99, weight: 0,
   },
 };

@@ -17,6 +17,8 @@ export interface ProjectileHit {
 }
 
 const MAX_PROJECTILES = 48;
+/** Eixo comprido da geometria do tracante. */
+const _FORWARD = new THREE.Vector3(0, 0, 1);
 const _step = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 
@@ -28,8 +30,20 @@ const _dir = new THREE.Vector3();
 export class ProjectileSystem {
   readonly group = new THREE.Group();
   private pool: Projectile[] = [];
-  private geo = new THREE.SphereGeometry(0.14, 10, 8);
-  private mat = new THREE.MeshBasicMaterial({ color: 0xbdf0ff });
+  /**
+   * Tracante, nao bola.
+   *
+   * Era uma esfera de 28 cm azul-clara voando a 27 m/s — de longe aquilo nao le'
+   * como tiro, le' como bola de neve. Uma caixa comprida e fina, orientada na
+   * direcao do voo, le' como rastro de projetil.
+   *
+   * O comprimento tem limite: um tracante fino DEMAIS some quando vem na sua
+   * direcao (de frente voce so' ve' a secao), e ai' o tiro vira invisivel — que
+   * e' exatamente o problema oposto. 7.5 cm de secao ainda da' um ponto visivel
+   * de frente, e 55 cm de rastro le' como risco de lado.
+   */
+  private geo = new THREE.BoxGeometry(0.075, 0.075, 0.55);
+  private mat = new THREE.MeshBasicMaterial({ color: 0xffa63d });
 
   constructor() {
     for (let i = 0; i < MAX_PROJECTILES; i++) {
@@ -57,6 +71,10 @@ export class ProjectileSystem {
     p.life = 5;
     p.mesh.visible = true;
     p.mesh.position.copy(from);
+    // Aponta o tracante pra onde ele vai. Uma vez so': sem gravidade a direcao
+    // nao muda, e girar isso a cada quadro seria trabalho a toa.
+    _dir.copy(p.velocity).normalize();
+    p.mesh.quaternion.setFromUnitVectors(_FORWARD, _dir);
   }
 
   /**

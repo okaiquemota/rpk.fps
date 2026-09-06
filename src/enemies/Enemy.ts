@@ -48,9 +48,8 @@ function geometriesFor(kind: EnemyKind): EnemyGeometry {
     eye: new THREE.BoxGeometry(w * 0.5, H * 0.17 * 0.2, 0.05),
     // Colete: um pouco mais largo que o tronco e bem fino, so' na frente.
     vest: new THREE.BoxGeometry(w * 1.04, H * 0.24, w * 0.78),
-    // Arma, so' pra quem atira de longe. Uma caixa comprida basta: o que da'
-    // leitura a essa distancia e' a silhueta apontada pra frente, nao o detalhe.
-    gun: new THREE.BoxGeometry(w * 0.16, w * 0.2, H * 0.42),
+    // Arma, so' pra quem atira de longe.
+    gun: new THREE.BoxGeometry(w * 0.15, w * 0.34, H * 0.52),
     leg: new THREE.BoxGeometry(w * 0.3, H * 0.42, w * 0.3),
     arm: new THREE.BoxGeometry(w * 0.24, H * 0.38 * 0.85, w * 0.24),
   };
@@ -84,6 +83,8 @@ export class Enemy {
   private eyeMat!: THREE.MeshStandardMaterial;
   private bodyMat!: THREE.MeshStandardMaterial;
   private headMat!: THREE.MeshStandardMaterial;
+  /** So' existe em quem tem arma. */
+  private gunMat: THREE.MeshStandardMaterial | null = null;
   private limbs: THREE.Mesh[] = [];
 
   private attackTimer = 0;
@@ -189,12 +190,26 @@ export class Enemy {
       this.limbs.push(arm);
     }
 
-    // Arma na mao direita, deitada pra frente. Fica FORA de `limbs` de
-    // proposito: os membros balancam na caminhada, e uma arma balancando junto
-    // aponta pro chao no meio do passo.
+    // Arma ATRAVESSADA no peito, nao apontada pra frente.
+    //
+    // Apontada pra frente ela some, e nao por ser pequena ou escura: um objeto
+    // comprido apontado pro observador aparece como a SECAO dele. Encarando o
+    // soldado, um cano de 90 cm virava um quadradinho de 10 — e a queixa foi
+    // exatamente "nao tem arma nenhuma na mao". De esguelha, o comprimento
+    // inteiro entra na silhueta, de qualquer angulo.
+    //
+    // Fica FORA de `limbs` de proposito: os membros balancam na caminhada, e uma
+    // arma balancando junto aponta pro chao no meio do passo.
     if (d.ranged) {
-      const gun = new THREE.Mesh(geo.gun, this.headMat);
-      gun.position.set(w * 0.63, bodyY + bodyH * 0.05, -w * 0.55);
+      // Metal proprio, e nao a cor do equipamento: com o mesmo tom do colete a
+      // arma existia na silhueta mas sumia na cor — quase preta sobre quase
+      // preto. Arma e' arma em todo mundo, entao a cor nao vem do `gearColor`.
+      this.gunMat = new THREE.MeshStandardMaterial({
+        color: 0x15171a, roughness: 0.42, metalness: 0.55, transparent: true,
+      });
+      const gun = new THREE.Mesh(geo.gun, this.gunMat);
+      gun.position.set(w * 0.3, bodyY + bodyH * 0.02, -w * 0.46);
+      gun.rotation.set(-0.12, 0.62, 0);
       gun.castShadow = true;
       this.group.add(gun);
     }
@@ -445,6 +460,7 @@ export class Enemy {
 
     const fade = clamp(1 - Math.max(0, this.deathTimer - 1) / 0.7, 0, 1);
     this.bodyMat.opacity = this.headMat.opacity = fade;
+    if (this.gunMat) this.gunMat.opacity = fade;
     this.eyeMat.opacity = fade;
     this.eyeMat.emissiveIntensity = fade * EYE_GLOW;
 
@@ -471,8 +487,18 @@ export class Enemy {
   }
 
   /** Ponto de onde sai o projetil (altura do peito). */
+  /**
+   * De onde sai o tiro. Segue a arma atravessada no peito: saindo do centro,
+   * o tracante nascia do torso e nao da peca que se ve' na mao.
+   */
   muzzlePosition(out = new THREE.Vector3()): THREE.Vector3 {
-    return out.set(this.position.x, this.position.y + this.def.height * 0.62, this.position.z);
+    const lado = this.def.radius * 1.7 * 0.42;
+    const giro = this.group.rotation.y;
+    return out.set(
+      this.position.x + Math.cos(giro) * lado,
+      this.position.y + this.def.height * 0.62,
+      this.position.z - Math.sin(giro) * lado,
+    );
   }
 
   applyKnockback(dir: THREE.Vector3, force: number): void {
@@ -492,6 +518,7 @@ export class Enemy {
   dispose(): void {
     this.bodyMat.dispose();
     this.headMat.dispose();
+    this.gunMat?.dispose();
     this.eyeMat.dispose();
   }
 }

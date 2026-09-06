@@ -204,7 +204,22 @@ export class Screens {
   showPause(): void { this.setVisible(this.pause); }
   hideAll(): void { this.setVisible(null); }
 
-  showGameOver(stats: RunStats, upgrades?: { name: string; count: number }[]): void {
+  /**
+   * `fim` descreve como a partida ACABOU. Sem ele, a tela assume morte — que e'
+   * o unico jeito de perder na sobrevivencia, mas nao no confronto: la' chegar
+   * no alvo de abates e' VITORIA, e a tela anunciava "VOCE MORREU" pra quem
+   * tinha acabado de ganhar.
+   */
+  showGameOver(
+    stats: RunStats,
+    upgrades?: { name: string; count: number }[],
+    fim?: { titulo: string; vitoria: boolean; rotulo: string },
+  ): void {
+    const titulo = $('go-title');
+    titulo.textContent = fim?.titulo ?? 'VOCE MORREU';
+    titulo.classList.toggle('dead', !fim?.vitoria);
+    titulo.classList.toggle('won', fim?.vitoria === true);
+    $('go-wave-label').textContent = fim?.rotulo ?? 'ONDAS';
     $('go-wave').textContent = String(stats.wave);
     $('go-kills').textContent = String(stats.kills);
     $('go-score').textContent = String(stats.score);
@@ -213,7 +228,7 @@ export class Screens {
 
     const isRecord = stats.score > this.save.bestScore;
     if (isRecord) this.save.bestScore = stats.score;
-    if (stats.wave > this.save.bestWave) this.save.bestWave = stats.wave;
+    if (!fim && stats.wave > this.save.bestWave) this.save.bestWave = stats.wave;
     this.persist();
 
     // Mostra o "build" com que a pessoa chegou ate' ali.
