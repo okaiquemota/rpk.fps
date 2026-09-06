@@ -69,13 +69,22 @@ export class WeaponAnimator {
       a.clampWhenFinished = true;
     }
 
-    // Atirar vira ADITIVO: o clipe passa a descrever a DIFERENCA em relacao ao
-    // idle, e nao uma pose completa. Sem isso, cada tiro apagaria a animacao de
-    // base por um quarto de segundo.
+    // Atirar vira ADITIVO: o clipe passa a descrever a DIFERENCA em relacao a`
+    // propria pose de repouso dele, e nao uma pose completa. Sem isso, cada
+    // tiro apagaria a animacao de base por um quarto de segundo.
+    //
+    // A referencia e' o PROPRIO clipe no quadro 0 — nao o `idle`. Passar o
+    // `idle` parece mais certo e nao e': `makeClipAdditive` casa trilha por
+    // NOME, e o idle deste modelo nao tem trilha de posicao pro osso do
+    // ferrolho, so' de rotacao. Sem referencia pra subtrair, aquela posicao
+    // continuava absoluta e a camada aditiva somava ela por cima da base — o
+    // ferrolho saia voando pra exatamente o DOBRO da distancia do corpo
+    // (medido: 0.1014 parado, 0.2027 atirando). Um pedaco de metal boiando ao
+    // lado da arma a cada tiro.
     const tiro = achar(/shoot(ing)?$/i);
-    if (tiro && idle) {
+    if (tiro) {
       const copia = tiro.clone();
-      THREE.AnimationUtils.makeClipAdditive(copia, 0, idle);
+      THREE.AnimationUtils.makeClipAdditive(copia);
       this.atirar = this.mixer.clipAction(copia);
       this.atirar.blendMode = THREE.AdditiveAnimationBlendMode;
       this.atirar.setLoop(THREE.LoopOnce, 1);

@@ -215,8 +215,22 @@ Tres camadas, porque os clipes nao servem todos pro mesmo tipo de coisa:
   volta no evento `finished` do mixer;
 - **ADITIVO** — atirar. Este nao pode substituir a base: o ferrolho precisa
   cyclar enquanto a arma continua no idle ou no passo. `makeClipAdditive` faz o
-  clipe descrever a DIFERENCA em relacao ao idle; substituindo, cada tiro
-  cortaria a animacao de baixo por um quarto de segundo.
+  clipe descrever a DIFERENCA em relacao a` propria pose de repouso dele;
+  substituindo, cada tiro cortaria a animacao de baixo por um quarto de segundo.
+
+**A referencia do `makeClipAdditive` e' o PROPRIO clipe, nao o idle.** Passar o
+idle parece mais certo e nao e': a funcao casa trilha por NOME, e o idle deste
+modelo nao tem trilha de posicao pro osso do ferrolho — so' de rotacao. Sem
+referencia pra subtrair, aquela posicao continua ABSOLUTA, e a camada aditiva
+soma ela por cima da base. O ferrolho saia voando pra exatamente o DOBRO da
+distancia do corpo (medido: 0.1014 parado, 0.2027 atirando — o "dobro exato" e'
+a assinatura desse erro), aparecendo como uma peca de metal boiando ao lado da
+arma a cada tiro.
+
+Depois de corrigido, o clipe continua fazendo efeito: um ponto de prova no osso
+do ferrolho oscila 0.0044 parado e 0.0526 atirando, doze vezes mais. Verificar
+que o bug sumiu NAO e' o mesmo que verificar que a animacao ainda roda — meca as
+duas coisas.
 
 **A duracao nunca e' a do arquivo.** O clipe de recarga tem 2.67 s e o
 `reloadTime` do fuzil e' 1.75 — tocado na velocidade do arquivo, a arma estaria
