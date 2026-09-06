@@ -68,6 +68,7 @@ export class PickupManager {
     }
 
     const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
     mesh.position.copy(position);
     mesh.position.y += 0.6;
 

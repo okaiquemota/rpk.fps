@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { AABB, distanceToBoxXZ, randRange, rayAABB } from '../core/math';
 import { WORLD } from '../config';
-import { crateTexture, floorTexture, wallTexture } from './textures';
+import { containerTexture, crateTexture, floorTexture, scaleBoxUVs, steelTexture, wallTexture } from './textures';
 
 const _losDir = new THREE.Vector3();
 
@@ -57,15 +57,19 @@ export class Level {
   private buildSky(): void {
     // Gradiente vertical numa esfera invertida. Barato e resolve o "vazio preto"
     // que aparece acima das paredes da arena.
+    //
+    // Dia claro com bruma quente no horizonte, nao noite. O ceu ocupa a faixa
+    // toda acima do muro: escuro ali, a arena inteira le' como galpao fechado,
+    // por mais que o chao esteja iluminado.
     const geo = new THREE.SphereGeometry(180, 24, 16);
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
       uniforms: {
-        topColor: { value: new THREE.Color(0x28374f) },
-        horizonColor: { value: new THREE.Color(0x3d4350) },
-        groundColor: { value: new THREE.Color(0x1a1713) },
+        topColor: { value: new THREE.Color(0x3d6fa8) },
+        horizonColor: { value: new THREE.Color(0xb8a888) },
+        groundColor: { value: new THREE.Color(0x6b5c48) },
       },
       vertexShader: `
         varying vec3 vWorld;
@@ -106,6 +110,7 @@ export class Level {
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92, metalness: 0.05 });
     const mesh = new THREE.Mesh(geo, mat);
+    mesh.receiveShadow = true;
     this.group.add(mesh);
     this.geometries.push(geo);
     this.materials.push(mat);
@@ -136,8 +141,12 @@ export class Level {
 
     for (const [x, y, z, w, wh, d] of walls) {
       const geo = new THREE.BoxGeometry(w, wh, d);
+      // Um painel a cada 4.5 m, medido em metros e nao em "n vezes por parede".
+      scaleBoxUVs(geo, w, wh, d, 4.5);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z);
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
       this.group.add(mesh);
       this.geometries.push(geo);
       this.baseColliders.push(AABB.fromCenterSize(x, y, z, w, wh, d));
@@ -145,9 +154,13 @@ export class Level {
   }
 
   private buildProps(): void {
-    const C_CRATE = '#4a3f31';
-    const C_METAL = '#39414a';
-    const C_RUST = '#5a3b2c';
+    // Tres TIPOS de peca, nao tres cores do mesmo desenho. Antes tudo usava a
+    // mesma textura tingida, e o resultado era um patio de blocos pintados: o
+    // que da' leitura de mapa e' reconhecer contentor, engradado e chapa de
+    // longe, cada um com a propria silhueta de superficie.
+    const C_CRATE = 'crate';
+    const C_METAL = 'steel';
+    const C_RUST = 'container';
 
     // Layout desenhado a mao: coberturas medias no centro, blocos altos nas
     // diagonais e rampas/plataformas pra dar verticalidade.
@@ -199,21 +212,29 @@ export class Level {
       { x: -14, y: 0, z: -21, w: 2, h: 1.4, d: 6, color: C_CRATE },
     ];
 
-    // Um material por cor (3 texturas no total) — barato pro renderer.
+    // Um material por tipo (3 texturas no total) — barato pro renderer.
+    const kinds: [string, THREE.Texture, number, number][] = [
+      [C_CRATE, crateTexture('#8a6a3e'), 0.94, 0.02],
+      [C_METAL, steelTexture('#6d7076'), 0.62, 0.45],
+      [C_RUST, containerTexture('#9c4a2c'), 0.8, 0.25],
+    ];
     const matByColor = new Map<string, THREE.MeshStandardMaterial>();
-    for (const color of [C_CRATE, C_METAL, C_RUST]) {
-      const tex = crateTexture(color);
+    for (const [key, tex, roughness, metalness] of kinds) {
       this.textures.push(tex);
-      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.15 });
+      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness, metalness });
       this.materials.push(mat);
-      matByColor.set(color, mat);
+      matByColor.set(key, mat);
     }
 
     for (const s of specs) {
       const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
-      // Repetir a textura conforme o tamanho pra escala nao esticar.
+      // Textura em metros, nao em "uma repeticao por bloco": sem isto a ripa do
+      // engradado de 10 m sai cinco vezes maior que a do de 2 m.
+      scaleBoxUVs(geo, s.w, s.h, s.d, s.color === C_CRATE ? 1.6 : 2.6);
       const mesh = new THREE.Mesh(geo, matByColor.get(s.color)!);
       mesh.position.set(s.x, s.y + s.h / 2, s.z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       this.propsGroup.add(mesh);
       this.geometries.push(geo);
       this.propColliders.push(AABB.fromFootprint(s.x, s.y, s.z, s.w, s.h, s.d));
@@ -223,19 +244,41 @@ export class Level {
   private buildLights(): void {
     // three >= r155 usa intensidades fisicas: os valores sao ~PI vezes maiores
     // do que o antigo modo "legacy lights".
-    const hemi = new THREE.HemisphereLight(0x9db8d8, 0x3b3228, 3.0);
+    // Ceu azul por cima, quique quente do concreto por baixo.
+    const hemi = new THREE.HemisphereLight(0x9fc0e8, 0x6b5a44, 2.4);
     this.group.add(hemi);
 
-    const sun = new THREE.DirectionalLight(0xfff0d8, 4.6);
-    sun.position.set(28, 44, 18);
+    // Sol baixo e quente: rasante da sombra mais longa, e sombra longa e' o que
+    // faz um patio parecer patio. A pino, tudo achata.
+    const sun = new THREE.DirectionalLight(0xffe6bd, 5.2);
+    sun.position.set(34, 30, 20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 140;
+    const s = this.size * 0.72;
+    sun.shadow.camera.left = -s;
+    sun.shadow.camera.right = s;
+    sun.shadow.camera.top = s;
+    sun.shadow.camera.bottom = -s;
+    sun.shadow.bias = -0.0006;
+    sun.shadow.normalBias = 0.03;
     this.group.add(sun);
     this.group.add(sun.target);
 
-    // Sem luz de preenchimento nos cantos. Custava caro pelo motivo que nao
-    // aparece em perfil de geometria: a contagem de luzes entra no SHADER, e
-    // cada point light e' avaliada em todo pixel de todo material — apagada ou
-    // nao. Duas delas por decoracao sao dois lacos por fragmento na tela
-    // inteira, todo quadro.
+    // Preenchimento nos cantos, so' pra abrir a sombra. Antes eram laranja e
+    // azul saturados, um em cada canto: aquilo pintava a arena de neon e dava
+    // cara de fliperama, nao de patio ao sol. A CONTAGEM de luzes segue a mesma
+    // de proposito — mudar quantas luzes a cena tem recompila todo material.
+    const fills: [number, number, number, number][] = [
+      [-22, 6, -22, 0xffd9a8],
+      [22, 6, 22, 0xbfd4ee],
+    ];
+    for (const [x, y, z, color] of fills) {
+      const p = new THREE.PointLight(color, 42, 46, 2);
+      p.position.set(x, y, z);
+      this.group.add(p);
+    }
   }
 
   /** Arena completa: obstaculos visiveis e colidindo. */

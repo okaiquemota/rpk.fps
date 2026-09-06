@@ -193,7 +193,7 @@ interface FlashLight {
 
 const MAX_TRACERS = 32;
 const MAX_SHELLS = 28;
-const MAX_FLASHES = 2;
+const MAX_FLASHES = 4;
 const TRACER_LENGTH = 4.5;
 
 function decalTexture(): THREE.Texture {
@@ -283,6 +283,7 @@ export class Effects {
     for (let i = 0; i < MAX_SHELLS; i++) {
       const mesh = new THREE.Mesh(shellGeo, shellMat);
       mesh.visible = false;
+      mesh.castShadow = true;
       this.group.add(mesh);
       this.shells.push({
         life: 0, velocity: new THREE.Vector3(), spin: new THREE.Vector3(), bounces: 0, mesh,
@@ -295,12 +296,8 @@ export class Effects {
     // QUANTIDADE de luzes da cena invalida os programas de shader de todos os
     // materiais, e a recompilacao trava o jogo por centenas de milissegundos —
     // era isso que engasgava a cada tiro e a cada inimigo morto. Uma luz apagada
-    // aqui e' uma luz com intensity 0, que nao custa recompilacao.
-    //
-    // Mas nao e' de graca: apagada ou nao, ela entra no laco de luzes do shader
-    // e e' avaliada em CADA pixel de CADA material. Por isso sao duas, e nao as
-    // quatro de antes — dois clarões ao mesmo tempo ja' cobrem tiro e impacto,
-    // e o par que sobrava custava a tela inteira, todo frame.
+    // aqui e' uma luz com intensity 0, que custa alguns ciclos por fragmento e
+    // nao custa nenhuma recompilacao.
     for (let i = 0; i < MAX_FLASHES; i++) {
       const light = new THREE.PointLight(0xffb457, 0, 14, 2);
       this.group.add(light);

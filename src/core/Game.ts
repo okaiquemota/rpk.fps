@@ -116,18 +116,16 @@ export class Game {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    // Sem sombra projetada. Ela custava dois preços: um passe extra desenhando
-    // a cena inteira num mapa de 2048, e uma amostragem PCF em CADA pixel do
-    // passe principal. Com a arena toda em BoxGeometry, a luz direcional ja'
-    // separa as faces sozinha — o que se perde e' a sombra no chao.
-    this.renderer.shadowMap.enabled = false;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.autoClear = false;
 
-    // O fog casa com a cor do horizonte do ceu pra nao ter emenda visivel.
-    this.scene.fog = new THREE.Fog(0x3d4350, WORLD.fogNear, WORLD.fogFar);
+    // Casa com a bruma do horizonte do ceu (Level.buildSky); destoando, a
+    // parede do fundo recorta do ceu como adesivo.
+    this.scene.fog = new THREE.Fog(0xaf9f83, WORLD.fogNear, WORLD.fogFar);
 
     // Sem environment map, todo material metalico renderiza praticamente preto.
     // O RoomEnvironment gera um em memoria, sem baixar HDRI nenhum.
