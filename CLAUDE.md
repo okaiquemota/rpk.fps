@@ -141,41 +141,16 @@ tem duracao bem diferente, e e' isso que denuncia qual dos dois tocou.
 
 ## Cara da arena
 
-A referencia e' patio industrial ao sol, no espirito do CrossFire: concreto
-quente, ferrugem, contentor. A versao anterior era azul-acinzentada com ceu
-quase preto e duas luzes de canto laranja e azul saturadas — lia como galpao
-fechado com iluminacao de fliperama.
+Ja' houve uma versao "patio industrial ao sol" — concreto quente, contentor com
+nervura, painel de 4.5 m, ceu de dia claro. Foi **revertida a pedido**: nao
+resolvia o problema de desempenho da epoca, e a paleta fria original foi
+preferida. Esta' em `git show e03e088` se um dia valer a pena retomar.
 
-O que decide a leitura, em ordem de impacto:
-
-- **O ceu.** Ele ocupa a faixa toda acima do muro. Escuro ali, a arena inteira
-  parece coberta, por mais iluminado que esteja o chao. Hoje e' dia claro com
-  bruma quente no horizonte (`buildSky`), e a `Fog` do `Game` usa a MESMA cor da
-  bruma — destoando, a parede do fundo recorta do ceu como adesivo.
-- **Textura medida em METROS, nao em repeticoes por peca.** `scaleBoxUVs` em
-  `textures.ts` escala as UVs de cada caixa pelo tamanho dela. Sem isso, um
-  bloco de 10 m e um de 2 m mostram uma repeticao cada, a ripa do grande sai
-  cinco vezes maior que a do pequeno, e tudo le' como bloco pintado. O muro usa
-  painel de 4.5 m; os obstaculos, 1.6 m (madeira) e 2.6 m (metal).
-- **Tres TIPOS de peca, nao tres cores da mesma textura**: contentor (nervura
-  vertical), engradado (ripa e travessa diagonal) e chapa (rebite). Reconhecer
-  a peca de longe e' metade da sensacao de mapa.
-- **Sol baixo**, e a razao sol/hemisferica. Sem sombra projetada (ver
-  Desempenho), essa razao e' TODO o contraste que existe entre uma face no sol
-  e uma na sombra: hemisferica alta demais e a arena inteira vira o mesmo bege.
-
-Sobre repeticao: mancha grande e' o que mais denuncia uma textura tileada — a
-mesma bolha reaparecendo em catorze painels le' como padrao, enquanto grao fino
-e ruido nao. Por isso o muro leva mancha fraca e ferrugem discreta, e o
-contentor, que aparece em peca pequena, pode levar as duas fortes.
-
-**Pra tirar captura da arena, NAO teleporte pro centro.** Em (0, y, 0) fica o
-nucleo elevado, e a camera nasce dentro do bloco: o que aparece e' a face de
-baixo do bloco de cima, a meio metro do olho — magnificada e borrada, com cara
-de teto de concreto. Perdi meia duzia de capturas investigando esse "teto"
-antes de perceber que o ponto de vista e' que estava dentro do cenario. Use o
-`playerStart` ou um canto, e mire no centro com
-`yaw = Math.atan2(-(0 - x), -(0 - z))` (a convencao vem de `Player.forward`).
+O que aquela tentativa ensinou, e continua valendo pra qualquer mexida no
+visual: **mudanca de aparencia aqui e' quase de graca.** Textura de canvas,
+cor de luz, cor de ceu e UV nao aparecem no custo por quadro — o que aparece e'
+resolucao, contagem de luzes e sombra (ver Desempenho). Trocar o visual pra
+ganhar fps e' mirar no lugar errado.
 
 ## Modos
 
@@ -288,6 +263,14 @@ O que ja' foi cortado, e por que:
   com a AREA: 70% de resolucao sao 49% dos pixels. Numa tela de alta densidade
   e' a alavanca mais forte que existe aqui, porque o `setPixelRatio` ja' parte
   de `devicePixelRatio` (ate' 2) — 4x os pixels de uma tela comum.
+
+**A primeira pergunta nao e' sobre o jogo: e' quem esta' desenhando.** O F3
+mostra o nome do renderizador, e acende em vermelho quando o navegador caiu pra
+software (SwiftShader, llvmpipe). Nesse estado o jogo roda a ~2 fps por melhor
+que esteja, e nenhuma otimizacao de shader muda isso — o conserto e' ligar a
+aceleracao por hardware no navegador. Vale checar ANTES de mexer em qualquer
+coisa; sem essa linha da' pra otimizar por semanas atras de um problema que
+esta' no `chrome://settings`.
 
 **Nao da' pra medir fps neste ambiente.** Sob renderizacao por software o jogo
 roda a ~2 fps por melhor que esteja, e qualquer conclusao tirada dali mede o

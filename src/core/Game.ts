@@ -121,9 +121,7 @@ export class Game {
     this.renderer.autoClear = false;
 
     // O fog casa com a cor do horizonte do ceu pra nao ter emenda visivel.
-    // Casa com a bruma do horizonte do ceu (Level.buildSky); destoando, a
-    // parede do fundo recorta do ceu como adesivo.
-    this.scene.fog = new THREE.Fog(0xaf9f83, WORLD.fogNear, WORLD.fogFar);
+    this.scene.fog = new THREE.Fog(0x3d4350, WORLD.fogNear, WORLD.fogFar);
 
     // Sem environment map, todo material metalico renderiza praticamente preto.
     // O RoomEnvironment gera um em memoria, sem baixar HDRI nenhum.

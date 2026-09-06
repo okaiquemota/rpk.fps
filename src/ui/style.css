@@ -444,3 +444,5 @@ kbd {
   background: rgba(8, 10, 14, 0.72); border-left: 2px solid var(--good);
   font-variant-numeric: tabular-nums; color: var(--ink);
 }
+/* Renderizacao por software: o numero nao vai melhorar mexendo no jogo. */
+#perf.alerta { border-left-color: var(--danger); color: var(--danger); }
