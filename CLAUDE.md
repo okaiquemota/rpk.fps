@@ -259,29 +259,43 @@ sobre qual osso e'. O comprimento na tela quase nao mudou (3.5% -> 3.4% da
 altura); o que mudou foi a ESPESSURA, de 2.4% pra 0.9%.
 
 **Os cartuchos do modelo e a capsula do jogo dividem o trabalho, e a divisao e'
-por DISTANCIA.** O AK traz dois cartuchos proprios (`Bone004_04` e
+por ENQUADRAMENTO.** O AK traz dois cartuchos proprios (`Bone004_04` e
 `Bone005_05`) que a animacao cospe pela janela de ejecao, presos ao movimento da
 arma. Eles ficam VISIVEIS: no instante da ejecao sao melhores que a capsula do
 jogo, porque acompanham o ferrolho. O que o jogo faz e a animacao nao e' o
 resto: voar, quicar e fazer barulho no chao.
 
 Deixar os dois nascerem juntos nao funciona. A capsula do jogo saia a 43 cm do
-olho, do mesmo lado, no mesmo quadro — duas peças douradas lado a lado, cada
-uma com ~5% da altura da tela. Foi relatado como "as capsulas estao repetidas",
-e e' literalmente isso.
+olho, do mesmo lado, no mesmo quadro — duas pecas douradas lado a lado, cada uma
+com ~5% da altura da tela. Foi relatado como "as capsulas estao repetidas", e e'
+literalmente isso.
 
-Hoje a nossa sai no mesmo quadro do tiro, com a mesma fisica, mas so' entra em
-cena depois de `LIBERA` (0.75 m do olho, `Effects.ts`) — medido, 11 quadros,
-com ela ja' em 2.8% da altura da tela em vez de 4.8%. A conta e' por DISTANCIA
-e nao por tempo, porque e' a distancia que decide se ela vai aparecer gigante
-na cara do jogador. E e' um TRINCO, de uma vez so': testando a distancia todo
-quadro, uma capsula parada no chao piscaria quando o jogador passasse por cima.
+**Adiar por DISTANCIA nao resolve — so' escolhe o tamanho da duplicata.** A
+primeira correcao segurava a capsula ate' 0.75 m do olho (2.8% da tela em vez de
+4.8%) e o relato voltou igual: numa automatica a 720 tiros por minuto sai um
+cartucho novo na janela a cada 5 quadros, entao qualquer capsula nossa em quadro
+tem um cartucho do modelo por perto. Enquanto os dois dividirem a tela, sao dois.
 
-O cartucho do modelo, medido, se mexe por ~3 quadros e some (o clipe de tiro e'
-aditivo e nao prende a pose). Entao um cobre o instante da ejecao, o outro cobre
-o voo — e numa automatica a 720 tiros por minuto sai um cartucho novo na janela
-a cada 5 quadros, sem buraco. `hiddenBones` existe pra quando essa divisao nao
-for possivel, mas hoje esta' vazio.
+O que resolve e' geometrico: a capsula so' entra em cena quando o ponto dela cai
+FORA do frustum (`MARGEM` em NDC, `Effects.ts`). Ela continua saindo no mesmo
+quadro do tiro, com a mesma fisica; o que muda e' que o jogador nunca a ve'
+nascer. Medido numa rajada de 2 s: 23 capsulas, 23 entrando pela borda direita
+(NDC x >= 1.06, a 0.57–0.81 m do olho) e ZERO quadros com capsula nossa visivel
+dentro da tela, em 4222 amostras.
+
+Dois detalhes que a conta precisa ter:
+
+- **o Z do NDC tambem conta.** Atras da camera ele passa de 1, e a projecao de um
+  ponto nas costas do jogador volta espelhada pro meio da tela — sem checar Z, o
+  teste diz "dentro" pra coisa que nao esta' em lugar nenhum da tela;
+- **e' um TRINCO, de uma vez so'.** Testando o enquadramento todo quadro, a
+  capsula sumiria de novo ao reentrar em quadro, e uma parada no chao piscaria
+  toda vez que o jogador olhasse pra ela.
+
+Ha' uma rede de seguranca por distancia (`LIBERA`, 2.2 m) pro caso de FOV largo
+com a capsula demorando a cruzar a borda; nos testes ela nao chega a disparar.
+`hiddenBones` existe pra quando essa divisao nao for possivel, mas hoje esta'
+vazio.
 
 **O clarao do cano era um retangulo, nao um clarao.** Um plano de COR CHAPADA de
 0.3 m, a 37 cm do olho, com escala aleatoria de ate' 1.5: chegava a 72% da
@@ -697,19 +711,25 @@ levando o mesmo tempo pra reencontrar o centro. Por isso os `damp` andaram junto
 com os valores: arrasto 9 -> 14, recuo 14/12/9 -> 19/17/13.
 
 Medido (`vm.update()` num laco de 240 quadros, amplitude de ponta a ponta da
-posicao do rig na tela):
+posicao do rig na tela). Foram dois cortes, cada um a pedido, cada um pela
+metade:
 
-| | antes | depois |
-|---|---|---|
-| andando, lateral | 0.99 cm | 0.50 cm |
-| andando, vertical | 0.37 cm | 0.18 cm |
-| girando o mouse, lateral | 3.18 cm | 1.71 cm |
-| girando o mouse, vertical | 1.82 cm | 0.95 cm |
-| rajada, recuo em Z | 1.90 cm | 1.19 cm |
+| | original | 1o corte | hoje |
+|---|---|---|---|
+| andando, lateral | 0.99 cm | 0.50 cm | 0.25 cm |
+| andando, vertical | 0.37 cm | 0.18 cm | 0.09 cm |
+| girando o mouse, lateral | 3.18 cm | 1.71 cm | 0.91 cm |
+| girando o mouse, vertical | 1.82 cm | 0.95 cm | 0.50 cm |
+| rajada, recuo em Z | 1.90 cm | 1.19 cm | 0.74 cm |
 
 Cuidado com o `giroMax` nessa medicao: ele nao parte de zero. `MODEL_HIP_YAW`
-poe a arma a 4.01 graus em repouso, entao os 5.47 -> 4.50 da coluna de girar o
-mouse sao 1.46 -> 0.49 grau de arrasto, e nao uma queda de 18%.
+poe a arma a 4.01 graus em repouso, entao os 5.47 -> 4.50 -> 4.17 da coluna de
+girar o mouse sao 1.46 -> 0.49 -> 0.16 grau de arrasto, e nao uma queda de 24%.
+
+**Onde fica o fundo do poco.** Um terceiro corte pela metade poe a arma
+praticamente soldada na tela, e ai' o passo e o disparo deixam de se ler — o que
+sobraria pra vender o tiro seria so' o clarao e o tremor. Se um dia for preciso
+ir alem, o caminho e' outro: esconder a arma no ADS, nao imobiliza-la.
 
 ## Desempenho
 

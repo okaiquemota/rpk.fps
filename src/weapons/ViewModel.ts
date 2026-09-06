@@ -36,20 +36,22 @@ const MODEL_HIP_PITCH = 0.015;
  * Balanco e arrasto dao vida, mas em excesso viram enjoo e atrapalham mirar:
  * a arma nunca esta' onde estava um instante atras.
  *
- * Estes valores sao METADE dos anteriores, que ja' eram metade dos originais.
- * A intencao e' arma DURA: ela acompanha a camera em vez de nadar atras dela.
+ * Estes valores sao um QUARTO dos anteriores, que ja' eram metade dos
+ * originais — tres cortes pela metade, um por pedido. A intencao e' arma DURA:
+ * ela acompanha a camera em vez de nadar atras dela. Um passo alem disto e' a
+ * arma soldada na tela, e ai' o passo e o disparo deixam de se ler.
  * Nao ha nada de fisica aqui — velocidade, aceleracao e pulo do jogador ficam
  * em `PLAYER` e nao foram tocados; o que mudou e' so' o quanto a imagem oscila.
  *
  * Todos juntos aqui de proposito: espalhados pelo `update`, mexer no "quanto a
  * arma balanca" virava caca a seis numeros em quatro linhas diferentes.
  */
-const BOB_X = 0.004;        // vaivem lateral do passo
-const BOB_Y = 0.003;        // sobe-desce do passo
-const SWAY_GAIN = 0.00035;  // quanto a arma fica pra tras ao girar o mouse
-const SWAY_LIMIT = 0.014;   // teto do arrasto, em metros
-const SWAY_TILT = 1;        // giro que o arrasto lateral provoca
-const SWAY_ROLL = 0.8;      // inclinacao que o arrasto vertical provoca
+const BOB_X = 0.002;        // vaivem lateral do passo
+const BOB_Y = 0.0015;       // sobe-desce do passo
+const SWAY_GAIN = 0.00018;  // quanto a arma fica pra tras ao girar o mouse
+const SWAY_LIMIT = 0.007;   // teto do arrasto, em metros
+const SWAY_TILT = 0.6;      // giro que o arrasto lateral provoca
+const SWAY_ROLL = 0.45;     // inclinacao que o arrasto vertical provoca
 /**
  * Rigidez do arrasto: quanto maior, mais rapido a arma reencontra o centro.
  *
@@ -57,7 +59,7 @@ const SWAY_ROLL = 0.8;      // inclinacao que o arrasto vertical provoca
  * "duro". Baixando so' a amplitude, a arma continuaria voltando devagar — o
  * movimento seria menor, mas igualmente molenga.
  */
-const SWAY_DAMP = 14;
+const SWAY_DAMP = 20;
 
 /**
  * Quanto a arma pula ao disparar.
@@ -73,16 +75,16 @@ const SWAY_DAMP = 14;
  * E o recuo pra tras pesa mais agora do que ja' pesou: com a arma a 28 cm da
  * camera, 6 cm de deslize sao um quinto da distancia.
  */
-const KICK_BACK = 0.3;        // fracao do kickback que vira recuo visual
-const KICK_BACK_MAX = 0.055;  // teto do recuo, em metros
-const KICK_ROT = 0.72;        // giro por unidade de kickback
-const KICK_ROT_MAX = 0.14;    // teto do giro, em radianos
+const KICK_BACK = 0.2;        // fracao do kickback que vira recuo visual
+const KICK_BACK_MAX = 0.035;  // teto do recuo, em metros
+const KICK_ROT = 0.45;        // giro por unidade de kickback
+const KICK_ROT_MAX = 0.09;    // teto do giro, em radianos
 const KICK_ROT_APPLIED = 0.35;// quanto do giro vira inclinacao na tela
 /** Quanto dura sacar a arma, em segundos. O clipe e' ajustado pra caber. */
 const DRAW_TIME = 0.5;
 
-const KICK_ROLL = 2.5;        // rolagem por radiano do padrao lateral
-const KICK_ROLL_MAX = 0.075;  // teto da rolagem
+const KICK_ROLL = 1.5;        // rolagem por radiano do padrao lateral
+const KICK_ROLL_MAX = 0.045;  // teto da rolagem
 
 const _adsAlvo = new THREE.Vector3();
 const _zero = new THREE.Vector3();
@@ -404,12 +406,12 @@ export class ViewModel {
     // Com a luneta na tela a arma so' atrapalha a vista.
     rig.root.visible = !opts.scopedOut;
 
-    // Recuo volta pra posicao. Mais rapido que antes (14/12/9): o pulo da arma
-    // continua legivel, mas ela reassenta antes do proximo tiro em vez de
-    // ficar oscilando por cima do anterior numa rajada.
-    this.recoilOffset = damp(this.recoilOffset, 0, 19, dt);
-    this.recoilRot = damp(this.recoilRot, 0, 17, dt);
-    this.recoilRoll = damp(this.recoilRoll, 0, 13, dt);
+    // Recuo volta pra posicao. Bem mais rapido que os 14/12/9 originais: o pulo
+    // da arma continua legivel, mas ela reassenta antes do proximo tiro em vez
+    // de ficar oscilando por cima do anterior numa rajada.
+    this.recoilOffset = damp(this.recoilOffset, 0, 24, dt);
+    this.recoilRot = damp(this.recoilRot, 0, 22, dt);
+    this.recoilRoll = damp(this.recoilRoll, 0, 17, dt);
 
     // balanco de caminhada (some ao mirar)
     if (opts.grounded && opts.moveSpeed01 > 0.05) {

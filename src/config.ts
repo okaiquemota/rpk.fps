@@ -46,13 +46,14 @@ export const CAMERA = {
   /**
    * Amplitude do balanco da CAMERA ao andar, em metros.
    *
-   * Caiu de 0.045 pra 0.02 junto com o balanco da arma. O olho oscilando e' o
+   * Caiu de 0.045 pra 0.01 junto com o balanco da arma. O olho oscilando e' o
    * que mais atrapalha mirar em movimento: a arma sacode um pouco, mas a
-   * camera sacode o ALVO junto. Sobra o suficiente pra sentir o passo.
+   * camera sacode o ALVO junto. No que sobra o passo ainda se sente, e a mira
+   * para de andar sozinha.
    */
-  bobAmount: 0.02,
+  bobAmount: 0.01,
   /** Quanto o olho afunda ao aterrissar. Era 0.16 — um mergulho. */
-  landingDip: 0.09,
+  landingDip: 0.05,
 } as const;
 
 export const WORLD = {
@@ -102,7 +103,7 @@ export const FX = {
   maxSmoke: 260,
   tracerSpeed: 260,
   /** Quanto mais alto, mais rapido o tremor da tela assenta. Era 7. */
-  screenShakeDecay: 9.5,
+  screenShakeDecay: 12,
 } as const;
 
 /**

@@ -183,8 +183,8 @@ interface Shell {
   bounces: number;
   mesh: THREE.Mesh;
   /**
-   * A capsula existe e ja' voa, mas ainda nao aparece: e' o instante da ejecao,
-   * que pertence a` animacao da arma (ver `LIBERA`).
+   * A capsula existe e ja' voa, mas ainda nao aparece: enquanto estiver em
+   * quadro, a ejecao pertence a` animacao da arma (ver `MARGEM`).
    */
   escondida: boolean;
 }
@@ -199,20 +199,31 @@ interface FlashLight {
 const MAX_TRACERS = 32;
 const MAX_SHELLS = 28;
 /**
- * A que distancia do olho a capsula do jogo comeca a aparecer, em metros.
+ * Quando a capsula do jogo entra em cena: **so' depois de sair da TELA.**
  *
  * Modelo com animacao de tiro cospe o PROPRIO cartucho pela janela de ejecao,
  * preso ao movimento da arma — e ele e' melhor que o nosso naquele instante,
- * porque acompanha o ferrolho. Nascendo junto, os dois apareciam lado a lado a
- * 40 cm do olho, e o que se via era municao em dobro.
+ * porque acompanha o ferrolho. Enquanto os dois dividirem a tela, o que se ve'
+ * e' municao em dobro, por menor que a nossa esteja: numa automatica a 720
+ * tiros por minuto sai um cartucho novo na janela a cada 5 quadros, entao
+ * qualquer capsula nossa visivel tem um cartucho do modelo por perto.
  *
- * O que a animacao NAO faz e' o resto: voar, quicar e fazer barulho no chao.
- * Entao a nossa continua saindo no mesmo quadro do tiro, com a mesma fisica —
- * so' fica invisivel enquanto esta' na regiao da arma. A conta e' por
- * DISTANCIA, e nao por tempo, porque e' a distancia que decide se ela vai
- * aparecer gigante na cara do jogador ou pequena, ja' caindo.
+ * Uma regra por DISTANCIA nao resolve isso — so' escolhe o tamanho com que a
+ * duplicata aparece. A regra que resolve e' geometrica: a capsula so' aparece
+ * quando o ponto dela cai FORA do frustum da camera. Ela continua saindo no
+ * mesmo quadro do tiro, com a mesma fisica; o que muda e' que o jogador nunca
+ * a ve' nascer.
+ *
+ * `MARGEM` e' a folga em NDC (1 = borda da tela). Ela cobre o raio da propria
+ * capsula: com o centro exatamente na borda, metade dela ainda apareceria.
  */
-const LIBERA = 0.75;
+const MARGEM = 1.06;
+/**
+ * Rede de seguranca, em metros. Com FOV largo e a arma quase no eixo, a capsula
+ * pode demorar a cruzar a borda; passando disto ela entra de qualquer jeito, ja'
+ * longe o bastante pra nao formar par com o cartucho do modelo.
+ */
+const LIBERA = 2.2;
 const MAX_FLASHES = 4;
 const TRACER_LENGTH = 4.5;
 
@@ -243,6 +254,8 @@ function decalTexture(): THREE.Texture {
 const _reflect = new THREE.Vector3();
 const _vel = new THREE.Vector3();
 const _pos = new THREE.Vector3();
+const _ndc = new THREE.Vector3();
+const _olho = new THREE.Vector3();
 
 /**
  * Feedback visual do combate. Tudo em pools pre-alocados: durante um tiro de
@@ -415,7 +428,7 @@ export class Effects {
     s.life = 3.2;
     s.bounces = 0;
     // Nasce invisivel: quem mostra a ejecao e' a animacao da arma. Ela aparece
-    // sozinha no `update`, ao se afastar do olho (ver `LIBERA`).
+    // sozinha no `update`, ao sair da tela (ver `MARGEM`).
     s.escondida = true;
     s.mesh.visible = false;
   }
@@ -530,14 +543,36 @@ export class Effects {
     for (const d of this.decals) d.visible = false;
   }
 
+  /**
+   * O ponto esta' fora do enquadramento?
+   *
+   * `project` devolve NDC: dentro da tela e' -1..1 nos tres eixos. O Z tambem
+   * conta — atras da camera ele passa de 1, e sem essa checagem a projecao de um
+   * ponto atras do olho volta espelhada pro meio da tela, dando "dentro" pra
+   * coisa que esta' nas costas do jogador.
+   */
+  private foraDaTela(ponto: THREE.Vector3, camera: THREE.Camera): boolean {
+    _ndc.copy(ponto).project(camera);
+    if (Math.abs(_ndc.x) > MARGEM || Math.abs(_ndc.y) > MARGEM
+      || _ndc.z < -1 || _ndc.z > 1) return true;
+    // Rede de seguranca: longe o bastante do olho, entra mesmo em quadro.
+    const m = camera.matrixWorld.elements;
+    return ponto.distanceToSquared(_olho.set(m[12]!, m[13]!, m[14]!)) > LIBERA * LIBERA;
+  }
+
   addShake(amount: number): void {
     this.shakeTrauma = clamp(this.shakeTrauma + amount, 0, 1);
   }
 
   // ------------------------------------------------------------------
 
-  /** `olho` posiciona a camera: e' o que decide quando a capsula aparece. */
-  update(dt: number, olho?: THREE.Vector3): void {
+  /**
+   * `camera` decide quando a capsula entra em cena — ela so' aparece fora do
+   * enquadramento. As matrizes usadas sao as do quadro ANTERIOR (a camera do
+   * jogador ainda vai ser posicionada depois desta chamada), e isso nao importa:
+   * a decisao tem uma dezena de quadros de folga.
+   */
+  update(dt: number, camera?: THREE.Camera): void {
     this.sparks.update(dt);
     this.smoke.update(dt);
 
@@ -575,12 +610,12 @@ export class Effects {
       s.mesh.rotation.y += s.spin.y * dt;
       s.mesh.rotation.z += s.spin.z * dt;
 
-      // Saiu da regiao da arma: entra em cena e nao sai mais. O trinco importa
-      // — sem ele, uma capsula parada no chao piscaria toda vez que o jogador
-      // passasse por cima dela.
-      if (s.escondida) {
-        const longe = !olho || s.mesh.position.distanceToSquared(olho) > LIBERA * LIBERA;
-        if (longe) { s.escondida = false; s.mesh.visible = true; }
+      // Saiu da tela: entra em cena e nao sai mais. O trinco importa — sem ele,
+      // a capsula sumiria de novo assim que voltasse ao enquadramento, e uma
+      // parada no chao piscaria toda vez que o jogador olhasse pra ela.
+      if (s.escondida && (!camera || this.foraDaTela(s.mesh.position, camera))) {
+        s.escondida = false;
+        s.mesh.visible = true;
       }
 
       const p = s.mesh.position;
@@ -622,16 +657,16 @@ export class Effects {
 
     // --- screen shake (trauma^2 e' mais natural que linear) ---
     //
-    // Amplitude de 0.16 pra 0.1: numa rajada o trauma se empilha, e o que era
+    // Amplitude de 0.16 pra 0.06: numa rajada o trauma se empilha, e o que era
     // pra ser um soco por tiro virava a tela inteira tremendo enquanto se
     // atira — justo quando se precisa ver onde a bala foi.
     this.shakeTrauma = Math.max(0, this.shakeTrauma - FX.screenShakeDecay * dt * 0.14);
     const s = this.shakeTrauma * this.shakeTrauma;
     const now = performance.now() / 1000;
     this.shakeOffset.set(
-      Math.sin(now * 47) * s * 0.1,
-      Math.sin(now * 61 + 1.7) * s * 0.1,
-      Math.sin(now * 53 + 3.1) * s * 0.045,
+      Math.sin(now * 47) * s * 0.06,
+      Math.sin(now * 61 + 1.7) * s * 0.06,
+      Math.sin(now * 53 + 3.1) * s * 0.028,
     );
   }
 
