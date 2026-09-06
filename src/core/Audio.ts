@@ -1,7 +1,7 @@
 import { clamp, randRange } from './math';
 
 /** Posicao no mundo, pros sons que vem de algum lugar. */
-import { fetchShotSamples, decodeShotSamples, type RawSamples, type SampleBank } from './ShotSamples';
+import { fetchShotSamples, decodeShotSamples, SHELL_KEY, type RawSamples, type SampleBank } from './ShotSamples';
 
 /**
  * Quanto a amostra de tiro entra mais baixa que o sintetizado.
@@ -11,6 +11,15 @@ import { fetchShotSamples, decodeShotSamples, type RawSamples, type SampleBank }
  * jogo inteiro.
  */
 const SAMPLE_GAIN = 0.55;
+
+/**
+ * A capsula entra mais baixa que o tiro.
+ *
+ * Numa automatica sai uma por disparo — doze por segundo no fuzil —, e a
+ * gravacao dura um segundo inteiro com os quiques. Doze copias sobrepostas no
+ * volume do tiro viram um chocalho que cobre o proprio tiroteio.
+ */
+const SHELL_GAIN = 0.85;
 
 export interface SoundPos { x: number; y: number; z: number; }
 
@@ -410,7 +419,8 @@ export class AudioManager {
     const p = SHOT_PROFILES[kind];
     const takes = sample ? this.samples.get(sample) : undefined;
     if (takes) {
-      this.playSample(takes, p, at);
+      // 35% do envio do sintetizado: a gravacao ja' traz a sala dela.
+      this.playSample(takes, p.reverb * 0.35, SAMPLE_GAIN, at);
       return;
     }
     const v = randRange(0.94, 1.06); // variacao por tiro
@@ -433,13 +443,13 @@ export class AudioManager {
    * ambiente. E' o que faz o tiro gravado pertencer a` arena em vez de soar
    * como um aviso de interface colado por cima.
    */
-  private playSample(takes: AudioBuffer[], p: ShotProfile, at?: SoundPos): void {
+  private playSample(takes: AudioBuffer[], reverb: number, ganho: number, at?: SoundPos): void {
     const ctx = this.ctx;
     if (!ctx) return;
     // A sala ja' vem gravada na amostra: mandar o mesmo envio do sintetizado
     // empilha ambiente em cima de ambiente. E nada de saturacao — a gravacao
     // ja' tem a dela.
-    const out = this.output({ at, reverb: p.reverb * 0.35 });
+    const out = this.output({ at, reverb });
     if (!out) return;
 
     const src = ctx.createBufferSource();
@@ -447,7 +457,7 @@ export class AudioManager {
     // Sem isto, doze disparos por segundo da mesma amostra viram zumbido.
     src.playbackRate.value = randRange(0.96, 1.04);
     const gain = ctx.createGain();
-    gain.gain.value = SAMPLE_GAIN;
+    gain.gain.value = ganho;
     src.connect(gain).connect(out);
     src.start(this.now());
   }
@@ -491,6 +501,11 @@ export class AudioManager {
   }
 
   shellDrop(): void {
+    const takes = this.samples.get(SHELL_KEY);
+    if (takes) {
+      this.playSample(takes, 0.08, SHELL_GAIN);
+      return;
+    }
     this.blip(randRange(2600, 3600), randRange(1500, 2100), 0.05, 0.11, 'triangle', { reverb: 0.22 });
     this.burst(0.035, 0.09, 'bandpass', 4200, 1.6, { reverb: 0.18 });
   }

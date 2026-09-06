@@ -16,9 +16,13 @@ rifle.ogg       shotgun.ogg     sniper.ogg
 rifle-2.ogg     rifle-3.ogg     <- tomadas extras do fuzil
 ```
 
-Ids validos: `pistol`, `deagle`, `smg`, `rifle`, `shotgun`, `sniper`. Arquivo
-com outro nome e' ignorado. Da' pra cobrir so' uma arma; as outras seguem
-sintetizadas.
+Ids validos: `pistol`, `deagle`, `smg`, `rifle`, `shotgun`, `sniper`, e mais
+`balas` — a capsula batendo no chao, que nao e' arma mas usa o mesmo mecanismo.
+Arquivo com outro nome e' ignorado. Da' pra cobrir so' uma; o resto segue
+sintetizado.
+
+Subpasta NAO e' varrida. `originais/` guarda as gravacoes antes de aparar: ficam
+no repositorio, fora do bundle.
 
 **Ponha 3 ou 4 tomadas nas automaticas.** O fuzil dispara doze vezes por
 segundo — uma amostra so', repetida nessa cadencia, o ouvido escuta como
@@ -53,8 +57,22 @@ o build de arquivo unico deixa de conter o som, silenciosamente. Em wav mono
 44.1k isso da' quase 7 segundos, entao tiro nao chega perto; um som de recarga
 comprido, talvez.
 
-Corte o silencio do comeco: o som toca no instante do disparo, e 80 ms de nada
-no inicio da gravacao viram 80 ms de atraso percebido no gatilho.
+## Corte o silencio do comeco
+
+Isto nao e' detalhe, e' a diferenca entre o som funcionar e nao funcionar. O
+arquivo toca no instante do evento, entao silencio no inicio da gravacao vira
+atraso percebido, inteiro.
+
+Aconteceu aqui: o `balas.wav` original tinha **0.58 s de silencio na frente** —
+a capsula batia no chao e o som chegava meio segundo depois. Aparado, o mesmo
+arquivo caiu de 532 KB pra 96 KB (silencio das duas pontas, estereo pra mono,
+24 bits pra 16) sem perder nada do que se ouve.
+
+Vale medir em vez de confiar no olho da forma de onda: `scratchpad/somDoTiro.html`
+renderiza o disparo num OfflineAudioContext e diz em quantos ms o som comeca.
+
+**Mono pra capsula.** Ela toca sem panner, entao estereo so' dobra o peso. Pra
+arma do jogador, estereo faz sentido — o proprio tiro nao e' espacializado.
 
 ## Licenca
 

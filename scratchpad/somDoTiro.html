@@ -58,9 +58,45 @@ for (const [rotulo, kind, sample] of [
   const m = await medir(kind, sample);
   linhas.push(`${rotulo.padEnd(24)} pico <b>${String(m.pico).padEnd(6)}</b> duracao <b>${String(m.duracao).padEnd(6)}</b>s  ataque <b>${m.ataque}</b> ms`);
 }
+
+// A capsula tem caminho proprio: nao passa por shot().
+{
+  const ctx = new OfflineAudioContext(2, SR * 3, SR);
+  const am = new AudioManager();
+  await am.preloadShotSamples();
+  am.init(ctx);
+  await new Promise(r => setTimeout(r, 60));
+  am.shellDrop();
+  const buf = await ctx.startRendering();
+  const ch = buf.getChannelData(0);
+  let pico = 0, primeiro = -1, ultimo = -1;
+  for (let i = 0; i < ch.length; i++) {
+    const v = Math.abs(ch[i]);
+    if (v > pico) pico = v;
+    if (v > 0.002) { if (primeiro < 0) primeiro = i; ultimo = i; }
+  }
+  linhas.push(`${'capsula (balas.wav)'.padEnd(24)} pico <b>${pico.toFixed(3)}</b>  ` +
+              `comeca em <b>${(primeiro / SR * 1000).toFixed(0)}</b> ms  ` +
+              `duracao <b>${((ultimo - primeiro) / SR).toFixed(2)}</b>s`);
+}
 const am = new AudioManager();
 const achou = await am.preloadShotSamples();
 linhas.unshift(`armas com gravacao em assets/sounds/: <b>${achou}</b>\n`);
+// Empilhamento: doze capsulas em um segundo, que e' o que o fuzil produz.
+{
+  const ctx = new OfflineAudioContext(2, SR * 3, SR);
+  const am = new AudioManager();
+  await am.preloadShotSamples();
+  am.init(ctx);
+  await new Promise(r => setTimeout(r, 60));
+  for (let i = 0; i < 12; i++) am.shellDrop();
+  const buf = await ctx.startRendering();
+  const ch = buf.getChannelData(0);
+  let pico = 0;
+  for (let i = 0; i < ch.length; i++) pico = Math.max(pico, Math.abs(ch[i]));
+  linhas.push(`${'12 capsulas juntas'.padEnd(24)} pico <b>${pico.toFixed(3)}</b>`);
+}
+
 document.getElementById('out').innerHTML = linhas.join('\n');
 window.__ready = true;
 </script>

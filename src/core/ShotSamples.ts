@@ -1,7 +1,7 @@
 import type { WeaponId } from '../weapons/WeaponDefs';
 
 /**
- * Amostras de tiro OPCIONAIS, lidas de `assets/sounds/`.
+ * Amostras de som OPCIONAIS, lidas de `assets/sounds/`.
  *
  * A pasta vazia e' um estado valido: sem arquivo nenhum, o AudioManager
  * sintetiza como sempre fez. Por isso o `import.meta.glob` no lugar de um
@@ -11,6 +11,10 @@ import type { WeaponId } from '../weapons/WeaponDefs';
  * Nome do arquivo = id da arma, com sufixo opcional pra tomadas extras:
  *   rifle.ogg, rifle-2.ogg, rifle-3.ogg
  *
+ * Alem das armas vale `balas`, que e' a capsula batendo no chao. Nao e' arma,
+ * mas e' o mesmo mecanismo: arquivo presente troca o sintetizado, ausente nao
+ * muda nada.
+ *
  * Vale ter mais de uma tomada: a 720 rpm sao doze disparos por segundo, e uma
  * amostra so' repetida nessa cadencia o ouvido escuta como zumbido periodico,
  * nao como tiro. Com uma tomada so', a variacao fica por conta do
@@ -18,20 +22,27 @@ import type { WeaponId } from '../weapons/WeaponDefs';
  */
 const WEAPON_IDS: readonly WeaponId[] = ['pistol', 'deagle', 'smg', 'rifle', 'shotgun', 'sniper'];
 
+/** Sons que nao sao de arma. Hoje so' a capsula caindo. */
+export const SHELL_KEY = 'balas';
+const EXTRAS: readonly string[] = [SHELL_KEY];
+
+/** Chave de um som: id de arma, ou um dos extras. */
+export type SampleKey = WeaponId | typeof SHELL_KEY;
+
 const FILES = import.meta.glob('../../assets/sounds/*.{ogg,opus,mp3,m4a,wav}', {
   eager: true,
   query: '?url',
   import: 'default',
 }) as Record<string, string>;
 
-/** Bytes crus por arma — ainda nao decodificados. */
-export type RawSamples = Map<WeaponId, ArrayBuffer[]>;
+/** Bytes crus por som — ainda nao decodificados. */
+export type RawSamples = Map<SampleKey, ArrayBuffer[]>;
 export type SampleBank = Map<string, AudioBuffer[]>;
 
-function weaponOf(path: string): WeaponId | null {
+function keyOf(path: string): SampleKey | null {
   const base = path.split('/').pop()?.replace(/\.[^.]+$/, '') ?? '';
-  const id = base.split('-')[0] as WeaponId;
-  return WEAPON_IDS.includes(id) ? id : null;
+  const id = base.split('-')[0] as SampleKey;
+  return WEAPON_IDS.includes(id as WeaponId) || EXTRAS.includes(id) ? id : null;
 }
 
 /**
@@ -44,7 +55,7 @@ export async function fetchShotSamples(): Promise<RawSamples> {
   const out: RawSamples = new Map();
   const paths = Object.keys(FILES).sort();   // rifle-2 depois de rifle
   await Promise.all(paths.map(async (path) => {
-    const id = weaponOf(path);
+    const id = keyOf(path);
     if (!id) return;
     try {
       const res = await fetch(FILES[path]);

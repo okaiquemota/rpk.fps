@@ -116,7 +116,14 @@ enquanto `import x from '.../pistol.ogg'` quebraria a compilacao pra quem nao
 tem o arquivo. E' a diferenca em relacao aos `.glb`, que precisam existir.
 
 O nome do arquivo e' o id da arma (`rifle.ogg`), com sufixo pra tomadas extras
-(`rifle-2.ogg`). As regras de formato, tamanho e licenca estao em
+(`rifle-2.ogg`), mais `balas` pra capsula caindo. Subpasta nao e' varrida —
+`assets/sounds/originais/` guarda as gravacoes antes de aparar, fora do bundle.
+
+**Silencio no inicio da gravacao vira atraso percebido, inteiro.** O `balas.wav`
+que chegou tinha 0.58 s de silencio na frente: a capsula batia no chao e o som
+saia meio segundo depois. Aparar tirou isso e de quebra levou o arquivo de 532
+KB pra 96 KB. Meça com `scratchpad/somDoTiro.html`, que diz em quantos ms o som
+comeca. As regras de formato, tamanho e licenca estao em
 `assets/sounds/README.md` — a curta: **wav serve** (todo navegador decodifica), e
 a escolha de formato e' de tamanho, nao de suporte. Seis wav curtos e mono custam
 uns 350 KB num bundle de 1.4 MB. O que pesa e' wav longo ou estereo. Limite duro:
