@@ -25,8 +25,12 @@ interface EnemyGeometry {
   eye: THREE.BoxGeometry;
   leg: THREE.BoxGeometry;
   arm: THREE.BoxGeometry;
+  vest: THREE.BoxGeometry;
 }
 const geometryCache = new Map<EnemyKind, EnemyGeometry>();
+
+/** Brilho de repouso do visor. Baixo: e' pista de direcao, nao lanterna. */
+const EYE_GLOW = 1.0;
 
 function geometriesFor(kind: EnemyKind): EnemyGeometry {
   const cached = geometryCache.get(kind);
@@ -38,7 +42,11 @@ function geometriesFor(kind: EnemyKind): EnemyGeometry {
   const geo: EnemyGeometry = {
     body: new THREE.BoxGeometry(w, H * 0.38, w * 0.7),
     head: new THREE.BoxGeometry(w * 0.62, H * 0.17, w * 0.6),
-    eye: new THREE.BoxGeometry(w * 0.42, H * 0.17 * 0.28, 0.05),
+    // Visor: uma fresta larga e fina. O ponto pequeno e brilhante de antes lia
+    // como olho de desenho; uma faixa le' como capacete com visor.
+    eye: new THREE.BoxGeometry(w * 0.5, H * 0.17 * 0.2, 0.05),
+    // Colete: um pouco mais largo que o tronco e bem fino, so' na frente.
+    vest: new THREE.BoxGeometry(w * 1.04, H * 0.24, w * 0.78),
     leg: new THREE.BoxGeometry(w * 0.3, H * 0.42, w * 0.3),
     arm: new THREE.BoxGeometry(w * 0.24, H * 0.38 * 0.85, w * 0.24),
   };
@@ -50,6 +58,7 @@ function geometriesFor(kind: EnemyKind): EnemyGeometry {
 export function disposeEnemyGeometries(): void {
   for (const g of geometryCache.values()) {
     g.body.dispose(); g.head.dispose(); g.eye.dispose(); g.leg.dispose(); g.arm.dispose();
+    g.vest.dispose();
   }
   geometryCache.clear();
 }
@@ -126,9 +135,10 @@ export class Enemy {
     this.bodyMat = new THREE.MeshStandardMaterial({
       color: d.color, roughness: 0.75, metalness: 0.15, transparent: true,
     });
+    // Equipamento — capacete, colete e bracos. Antes era o corpo CLAREADO, o que
+    // dava cara de boneco; escuro le' como capacete e vest, e recorta o tronco.
     this.headMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(d.color).multiplyScalar(1.25), roughness: 0.6, metalness: 0.2,
-      transparent: true,
+      color: d.gearColor, roughness: 0.68, metalness: 0.22, transparent: true,
     });
 
     const geo = geometriesFor(d.kind);
@@ -137,14 +147,20 @@ export class Enemy {
     this.body.castShadow = true;
     this.group.add(this.body);
 
+    const vest = new THREE.Mesh(geo.vest, this.headMat);
+    vest.position.y = bodyY + bodyH * 0.06;
+    vest.castShadow = true;
+    this.group.add(vest);
+
     this.head = new THREE.Mesh(geo.head, this.headMat);
     this.head.position.y = headY;
     this.head.castShadow = true;
     this.group.add(this.head);
 
-    // "olho" emissivo: da' pra saber pra onde ele esta' olhando de longe
+    // Visor emissivo: da' pra saber pra onde ele esta' olhando de longe. O brilho
+    // e' fraco de proposito — forte demais vira farol de desenho animado.
     this.eyeMat = new THREE.MeshStandardMaterial({
-      color: d.eyeColor, emissive: d.eyeColor, emissiveIntensity: 2.4, roughness: 0.3,
+      color: d.eyeColor, emissive: d.eyeColor, emissiveIntensity: EYE_GLOW, roughness: 0.3,
       transparent: true,
     });
     const eye = new THREE.Mesh(geo.eye, this.eyeMat);
@@ -203,11 +219,11 @@ export class Enemy {
     if (this.state === 'spawning') {
       this.spawnTimer -= dt;
       this.group.scale.setScalar(clamp(1 - this.spawnTimer / 0.45, 0.01, 1));
-      this.eyeMat.emissiveIntensity = 2.4 + Math.sin(this.spawnTimer * 40) * 2;
+      this.eyeMat.emissiveIntensity = EYE_GLOW + Math.sin(this.spawnTimer * 40) * EYE_GLOW * 0.8;
       if (this.spawnTimer <= 0) {
         this.state = 'chasing';
         this.group.scale.setScalar(1);
-        this.eyeMat.emissiveIntensity = 2.4;
+        this.eyeMat.emissiveIntensity = EYE_GLOW;
       }
     }
 
@@ -388,7 +404,7 @@ export class Enemy {
     if (this.windupTimer >= 0) {
       const t = 1 - this.windupTimer / Math.max(this.def.windup, 0.001);
       this.body.scale.set(1 + t * 0.15, 1 - t * 0.18, 1 + t * 0.15);
-      this.eyeMat.emissiveIntensity = 2.4 + t * 5;
+      this.eyeMat.emissiveIntensity = EYE_GLOW + t * 2.2;
       armL.rotation.x = -1.2 * t;
       armR.rotation.x = -1.2 * t;
     } else {
@@ -397,7 +413,7 @@ export class Enemy {
         damp(this.body.scale.y, 1, 12, dt),
         damp(this.body.scale.z, 1, 12, dt),
       );
-      this.eyeMat.emissiveIntensity = damp(this.eyeMat.emissiveIntensity, 2.4, 8, dt);
+      this.eyeMat.emissiveIntensity = damp(this.eyeMat.emissiveIntensity, EYE_GLOW, 8, dt);
     }
 
     // respiracao sutil quando parado e longe
@@ -416,7 +432,7 @@ export class Enemy {
     const fade = clamp(1 - Math.max(0, this.deathTimer - 1) / 0.7, 0, 1);
     this.bodyMat.opacity = this.headMat.opacity = fade;
     this.eyeMat.opacity = fade;
-    this.eyeMat.emissiveIntensity = fade * 2.4;
+    this.eyeMat.emissiveIntensity = fade * EYE_GLOW;
 
     if (this.deathTimer > 1.75) this.state = 'dead';
   }
