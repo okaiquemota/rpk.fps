@@ -223,6 +223,27 @@ Tres camadas, porque os clipes nao servem todos pro mesmo tipo de coisa:
 pronta pra atirar com a mao ainda encaixando o pente na tela. Cada clipe entra
 com `timeScale` ajustado pro tempo que o JOGO reservou.
 
+**O modelo traz pecas que o jogo ja' faz — e melhor.** Alem do pente avulso, o
+AK vem com dois CARTUCHOS proprios (cilindros de 0.12 x 0.73 x 0.12,
+`Bone004_04` e `Bone005_05`) que a animacao de tiro cospe. O jogo ja' ejeta
+capsula com pool, fisica e som ao bater no chao; as duas juntas davam municao
+saindo em dobro. Os tres ossos estao em `hiddenBones`.
+
+**O clarao do cano era um retangulo, nao um clarao.** Um plano de COR CHAPADA de
+0.3 m, a 37 cm do olho, com escala aleatoria de ate' 1.5: chegava a 72% da
+altura da tela. Numa automatica a 720 tiros por minuto ele fica aceso dois
+tercos do tempo, entao virava um vidro amarelo permanente atravessado na frente
+do jogador — foi relatado como "um elemento flutuando enquanto atiro". Hoje sao
+0.14 m COM textura (`muzzleFlashTexture`): encolher sozinho ainda deixaria um
+retangulo, e o que faz o quadrado sumir e' o brilho cair a zero antes da aresta.
+
+**A boca do cano nao e' o canto da caixa.** O `muzzle` tinha X fixo em zero e Y
+no meio da caixa. Como o `offset` afasta toda arma pro canto da tela, o clarao
+saia ao LADO do cano; e num fuzil o pente puxa a caixa pra baixo, entao o meio
+dela fica abaixo da linha do cano. Agora e' o centro da fatia da frente
+(`pontaDoCano`), medido — no fuzil, (-0.127, 0.16, -0.193) em vez de
+(0, meio-da-caixa, frente).
+
 **O pente escondido precisa VOLTAR na recarga.** E' justamente ele que o clipe
 encaixa na arma; deixado oculto, a recarga mostra o pente velho saindo e nenhum
 entrando. `esconder`/`mostrar` sao chamados por quadro conforme

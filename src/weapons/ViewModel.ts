@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { clamp, damp, lerp } from '../core/math';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from './WeaponDefs';
 import { esconder, mostrar, type WeaponModel } from './WeaponModels';
+import { muzzleFlashTexture } from '../world/textures';
 
 interface Rig {
   root: THREE.Group;
@@ -105,6 +106,9 @@ export class ViewModel {
    * dessas recompila os shaders (o mesmo problema documentado em Effects).
    */
   private flashLight = new THREE.PointLight(0xffb457, 0, 9, 2);
+
+  /** Uma textura de clarao para todos os rigs. */
+  private flashTex = muzzleFlashTexture();
 
   /**
    * `models` traz as armas em .glb. O que faltar continua com o rig procedural
@@ -274,13 +278,7 @@ export class ViewModel {
     root.add(muzzlePoint);
 
     // clarao — plano com material aditivo, ligado so' no frame do tiro
-    const flash = new THREE.Mesh(
-      this.track(new THREE.PlaneGeometry(0.3 * def.muzzleScale, 0.3 * def.muzzleScale)),
-      this.track(new THREE.MeshBasicMaterial({
-        color: 0xffd27a, transparent: true, opacity: 0,
-        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-      })),
-    );
+    const flash = this.novoClarao(def.muzzleScale);
     flash.position.copy(muzzlePoint.position);
     flash.visible = false;
     root.add(flash);
@@ -301,6 +299,29 @@ export class ViewModel {
    * do arquivo. Mantem a mesma interface do rig procedural, entao nada mais no
    * viewmodel precisa saber qual dos dois esta' em uso.
    */
+  /**
+   * O plano do clarao.
+   *
+   * O lado caiu de 0.3 pra 0.14 m E ganhou textura. Os dois juntos: com 0.3 de
+   * cor chapada, o clarao cobria ate' 72% da altura da tela (0.3 vezes a escala
+   * aleatoria de 1.5, a 37 cm do olho) e, numa automatica a 720 tiros por
+   * minuto, ficava aceso dois tercos do tempo — um vidro amarelo permanente na
+   * frente do jogador. Encolher sozinho ainda deixaria um retangulo; a textura
+   * e' que faz a borda sumir.
+   */
+  private novoClarao(escala: number): THREE.Mesh {
+    const lado = 0.14 * escala;
+    const malha = new THREE.Mesh(
+      this.track(new THREE.PlaneGeometry(lado, lado)),
+      this.track(new THREE.MeshBasicMaterial({
+        map: this.flashTex, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      })),
+    );
+    malha.visible = false;
+    return malha;
+  }
+
   private buildModelRig(id: WeaponId, root: THREE.Group, model: WeaponModel): Rig {
     const def = WEAPON_DEFS[id];
     root.add(model.object);
@@ -309,13 +330,7 @@ export class ViewModel {
     muzzlePoint.position.copy(model.muzzle);
     root.add(muzzlePoint);
 
-    const flash = new THREE.Mesh(
-      this.track(new THREE.PlaneGeometry(0.3 * def.muzzleScale, 0.3 * def.muzzleScale)),
-      this.track(new THREE.MeshBasicMaterial({
-        color: 0xffd27a, transparent: true, opacity: 0,
-        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-      })),
-    );
+    const flash = this.novoClarao(def.muzzleScale);
     flash.position.copy(model.muzzle);
     flash.visible = false;
     root.add(flash);
@@ -452,7 +467,9 @@ export class ViewModel {
     const on = this.flashTimer > 0;
     rig.flash.visible = on;
     if (on) {
-      const t = this.flashTimer / 0.045;
+      // O timer nasce em 0.055 e o divisor e' 0.045, entao `t` comeca em 1.22:
+      // sem o teto, o pico da luz e 22% mais forte do que o numero abaixo diz.
+      const t = Math.min(this.flashTimer / 0.045, 1);
       (rig.flash.material as THREE.MeshBasicMaterial).opacity = t;
       rig.flash.rotation.z = Math.random() * Math.PI;
       rig.flash.scale.setScalar(lerp(0.75, 1.5, Math.random()));

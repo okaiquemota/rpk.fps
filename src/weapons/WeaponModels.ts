@@ -91,10 +91,17 @@ export const SPECS: Record<WeaponId, ModelSpec> = {
   rifle: {
     url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.278],
     adsOffset: [0.126, -0.071, -0.17], yaw: 0,
-    // O pente avulso da animacao de recarga. Medido: 266 vertices com
-    // centro em (-2.74, -3.15, -1.3), enquanto todo o resto da arma vive a
-    // menos de uma unidade da origem.
-    hiddenBones: ['Bone002_01'],
+    // Tres pecas que o modelo traz e o jogo ja' faz melhor, ou nao deveria
+    // mostrar. Medidas, nao adivinhadas:
+    //
+    // - `Bone002_01`: o pente avulso da animacao de recarga. 266 vertices com
+    //   centro em (-2.74, -3.06, -1.65), enquanto todo o resto da arma vive a
+    //   menos de uma unidade da origem. Volta a aparecer durante a recarga;
+    // - `Bone004_04` e `Bone005_05`: cilindros finos de 0.12 x 0.73 x 0.12 —
+    //   os CARTUCHOS do modelo, que a animacao de tiro cospe. O jogo ja' ejeta
+    //   capsula propria, com pool, fisica e som ao bater no chao; as duas
+    //   juntas davam munição saindo em dobro.
+    hiddenBones: ['Bone002_01', 'Bone004_04', 'Bone005_05'],
   },
   shotgun: { url: shotgunUrl, length: 0.66, offset: [-0.04, 0.025, 0.03], adsOffset: [0, 0, 0], yaw: Math.PI / 2 },
   sniper: { url: sniperUrl, length: 0.78, offset: [-0.04, 0.03, 0.03], adsOffset: [0, 0, 0], yaw: Math.PI / 2 },
@@ -148,6 +155,31 @@ export async function loadWeaponModels(): Promise<Map<WeaponId, WeaponModel>> {
   );
   await Promise.all(jobs);
   return out;
+}
+
+/**
+ * Centro da fatia da frente da peca — a boca do cano.
+ *
+ * Fatia fina (4% do comprimento) pra pegar so' a ponta: mais que isso comeca a
+ * incluir o guarda-mao e o ponto desce.
+ */
+function pontaDoCano(root: THREE.Object3D, caixa: THREE.Box3): THREE.Vector3 {
+  const frente = caixa.min.z + (caixa.max.z - caixa.min.z) * 0.04;
+  const soma = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  let n = 0;
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    const pos = o.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      if (o instanceof THREE.SkinnedMesh) o.applyBoneTransform(i, v);
+      v.applyMatrix4(o.matrixWorld);
+      if (v.z <= frente) { soma.add(v); n++; }
+    }
+  });
+  return n ? soma.divideScalar(n) : new THREE.Vector3(0, (caixa.min.y + caixa.max.y) / 2, caixa.min.z);
 }
 
 /** Um osso que fica escondido, e a escala que ele tem quando aparece. */
@@ -272,9 +304,15 @@ function prepare(
     }
   });
 
-  // Boca do cano: a ponta da frente da peca ja' orientada e posicionada.
+  // Boca do cano: nao e' o canto da caixa, e' onde o CANO de fato termina.
+  //
+  // Antes o X era zero fixo e o Y era o meio da caixa. Num modelo deslocado no
+  // X — que e' todo modelo, porque o `offset` afasta a arma pro canto — isso
+  // punha o clarao ao LADO do cano; e num fuzil, cujo pente puxa a caixa pra
+  // baixo, o meio da caixa fica abaixo da linha do cano. Medindo o centro da
+  // fatia da frente, o ponto cai no cano em qualquer modelo.
   const finalBox = medirCaixa(root);
-  const muzzle = new THREE.Vector3(0, (finalBox.min.y + finalBox.max.y) / 2, finalBox.min.z);
+  const muzzle = pontaDoCano(root, finalBox);
 
   return {
     object: root, muzzle, adsFix: new THREE.Vector3(...spec.adsOffset), animator,

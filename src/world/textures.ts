@@ -453,3 +453,54 @@ export function scaleBoxUVs(geo: THREE.BufferGeometry, w: number, h: number, d: 
   }
   uv.needsUpdate = true;
 }
+
+/**
+ * Clarao do cano.
+ *
+ * Era um plano de cor CHAPADA, e isso e' o problema: um retangulo solido de
+ * cor unica nao le' como fogo, le' como retangulo. Com a arma a 37 cm do olho,
+ * ele cobria quase metade da altura da tela, e numa arma automatica ficava
+ * aceso dois tercos do tempo — um vidro amarelo permanente atravessado na
+ * frente do jogador.
+ *
+ * O que resolve nao e' so' encolher: e' a BORDA sumir. Aqui o brilho cai a zero
+ * antes de chegar na aresta do plano, entao o quadrado deixa de existir.
+ */
+export function muzzleFlashTexture(): THREE.Texture {
+  const S = 128;
+  const [canvas, ctx] = makeCanvas(S);
+  const c = S / 2;
+
+  // Espinhos: quatro longos e quatro curtos, como um clarao visto de frente.
+  ctx.translate(c, c);
+  for (let i = 0; i < 8; i++) {
+    const longo = i % 2 === 0;
+    const r = longo ? S * 0.48 : S * 0.26;
+    const g = ctx.createLinearGradient(0, 0, r, 0);
+    g.addColorStop(0, 'rgba(255, 244, 214, 0.95)');
+    g.addColorStop(0.45, 'rgba(255, 196, 96, 0.4)');
+    g.addColorStop(1, 'rgba(255, 150, 40, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(r, -S * (longo ? 0.045 : 0.07));
+    ctx.lineTo(r, S * (longo ? 0.045 : 0.07));
+    ctx.closePath();
+    ctx.fill();
+    ctx.rotate(Math.PI / 4);
+  }
+
+  // Nucleo quente por cima dos espinhos.
+  const nucleo = ctx.createRadialGradient(0, 0, 0, 0, 0, S * 0.2);
+  nucleo.addColorStop(0, 'rgba(255, 252, 238, 1)');
+  nucleo.addColorStop(0.4, 'rgba(255, 214, 130, 0.75)');
+  nucleo.addColorStop(1, 'rgba(255, 160, 50, 0)');
+  ctx.fillStyle = nucleo;
+  ctx.beginPath();
+  ctx.arc(0, 0, S * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
