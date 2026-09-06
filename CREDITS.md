@@ -2,6 +2,25 @@
 
 ## Modelos 3D
 
+Sao dois regimes diferentes, e a diferenca importa: um dispensa atribuicao, o
+outro EXIGE.
+
+### Fuzil — atribuicao obrigatoria
+
+**Ak47, por wburton** — licenciado sob
+[Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+- Autor: wburton (@wburton95)
+- Origem: https://sketchfab.com/3d-models/ak47-831519a097d84e079fd8bc4b15e5b57d
+- Alteracoes: convertido pro espaco do viewmodel (escala, orientacao,
+  enquadramento) e com o pente avulso da animacao de recarga oculto.
+
+CC BY **obriga** creditar autor, obra, licenca e as alteracoes. Por isso o
+credito tambem aparece na tela inicial do jogo: o build de arquivo unico circula
+sozinho, longe deste arquivo.
+
+### As outras cinco armas — CC0
+
 **Ultimate Guns Pack by Quaternius via Poly Pizza**
 
 Licenca: CC0 (dominio publico). Uso livre, inclusive comercial, sem exigencia

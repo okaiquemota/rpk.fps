@@ -34,9 +34,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const NAMES = ['pistol', 'deagle', 'smg', 'rifle', 'shotgun', 'sniper'];
 
-// O pacote nao e' uniforme: a pistola e a submetralhadora vem com o cano no -X.
-// Mesma tabela do SPECS em WeaponModels.ts.
-const FLIPPED = { pistol: true, smg: true };
+// Orientacao e ossos escondidos vem do PROPRIO SPECS do jogo. Duplicar essa
+// tabela aqui ja' custou um icone errado: o modelo novo mudou de eixo e o
+// tracador continuou girando pelo valor velho.
+import { SPECS, esconder } from '/src/weapons/WeaponModels.ts';
 
 // Largura de cada arma no espaco do icone. NAO e' proporcional ao comprimento
 // real — a pistola ficaria com 40px do lado do sniper e sumiria no killfeed.
@@ -206,7 +207,26 @@ let code = '';
 for (const name of NAMES) {
   const gltf = await loader.loadAsync(`/assets/models/${name}.glb`);
   const obj = gltf.scene;
-  obj.rotation.y = FLIPPED[name] ? -Math.PI / 2 : Math.PI / 2;
+  obj.rotation.y = SPECS[name].yaw;
+
+  // As mesmas tres preparacoes do jogo, e pelo mesmo motivo: sem elas o AK e'
+  // tracado no bind pose, com o pente avulso boiando ao lado e a caixa medindo
+  // os dois juntos — o que enquadra a camera no vazio e devolve uma tira.
+  if (gltf.animations.length) {
+    const mixer = new THREE.AnimationMixer(obj);
+    const idle = gltf.animations.find(c => /idle$/i.test(c.name)) ?? gltf.animations[0];
+    mixer.clipAction(idle).play();
+    mixer.update(0);
+  }
+  const ossos = [];
+  if (SPECS[name].hiddenBones?.length) {
+    obj.traverse(o => { if (o.isBone && SPECS[name].hiddenBones.includes(o.name)) ossos.push(o); });
+    esconder(ossos);
+  }
+  obj.updateMatrixWorld(true);
+  obj.traverse(o => {
+    if (o.isSkinnedMesh) { o.skeleton.update(); o.boundingBox = null; o.computeBoundingBox(); }
+  });
   // Chapa tudo em branco: o que interessa e' o contorno, nao o material.
   obj.traverse(o => { if (o.isMesh) o.material = new THREE.MeshBasicMaterial({ color: 0xffffff }); });
   obj.updateMatrixWorld(true);

@@ -62,7 +62,34 @@ Errar isso NAO aparece na tela: em perspectiva, arma apontando pra frente e pra
 tras parecem igualmente plausiveis (perdi tres capturas achando que era
 enquadramento).
 
-**`scratchpad/inspecionarModelo.html` faz essa conta pra voce.** Ele fatia a
+**Malha com esqueleto muda TUDO nessa medicao.** O primeiro modelo de fora com
+animacao custou meia duzia de medidas erradas, e a licao vale pros proximos:
+
+- vertice cru NAO e' onde o vertice aparece. Num `SkinnedMesh` ele passa pelas
+  matrizes dos ossos; medindo direto do `position`, dois metodos deram dois
+  eixos longos diferentes pro mesmo arquivo, e nenhum batia com a tela. Quem
+  sabe fazer a conta e' `applyBoneTransform`, depois de `skeleton.update()`;
+- `Box3.setFromObject` usa a caixa em CACHE da malha, que e' a do bind pose.
+  Invalide (`boundingBox = null`) antes de medir de novo — e' o que
+  `medirCaixa()` faz;
+- **a pose de repouso do arquivo pode nao ser uma pose de uso.** O AK guarda um
+  segundo pente, SOLTO no ar ao lado da arma, que so' entra em cena na recarga.
+  Ele entrava na caixa que escala e centra o modelo: a arma saia encolhida (pra
+  que "arma + pente" coubessem nos 62 cm) e centrada no vazio entre os dois.
+  A pose certa vem da animacao `idle`, aplicada antes de medir;
+- por isso existe `hiddenBones` no `SPECS`, com o osso do pente avulso. A lista
+  e' explicita e nao heuristica — esconder osso errado apaga parte da arma. E
+  precisa ser reaplicada DEPOIS de cada `mixer.update()`, senao a animacao
+  devolve o pente pro ar.
+
+**Enquadramento errado se disfarca de orientacao errada.** Com o pente inflando
+a caixa, o render parecia dizer que o cano apontava pro lado, e a medida do eixo
+— que estava certa desde o comeco — parecia errada. Foram quatro trocas de `yaw`
+atras de um problema que era de escala. Antes de mexer na orientacao, confira se
+a peca esta' do tamanho certo.
+
+**`scratchpad/inspecionarModelo.html` faz essa conta pra voce** (mas nao a de
+esqueleto: ele erra em modelo animado — o fuzil atual e' um deles). Ele fatia a
 peca ao longo do comprimento, compara a area da secao transversal nas duas
 pontas — a ponta FINA e' o cano — e imprime a linha de `SPECS` pronta, com
 `flipped`, `length` e `offset`. Quando as duas pontas dao area parecida a peca
@@ -71,19 +98,24 @@ chutar; ai' confira de lado, com a camera do viewmodel em (1.1, 0, 0) olhando
 pra origem — ali a direita da tela e' -Z, entao o cano tem que apontar pra
 direita.
 
-Duas conferencias que a pagina ja' passou: ela reencontra sozinha o `flipped` de
-todas as seis armas (pistola e SMG invertidas, as outras nao), e devolve pro
-fuzil exatamente o `offset` que foi calibrado a mao. E' isso que a torna
-confiavel pra um modelo que ninguem mediu ainda.
+A pagina reencontra sozinha a orientacao das cinco armas SEM esqueleto e devolve
+o `offset` calibrado a mao. No AK, que tem esqueleto, ela erra — quem decidiu
+foi o render.
 
 Trocar um modelo tambem NAO atualiza o icone do HUD: regere em
-`scratchpad/traceIcons.html`.
+`scratchpad/traceIcons.html`. Ele importa o `SPECS` do jogo — orientacao e
+ossos escondidos vem da MESMA fonte, porque a tabela duplicada que existia ali
+saiu de sincronia no primeiro modelo novo e devolveu um icone que era uma tira
+de quatro pontos.
 
 O enquadramento de cada arma sai de DOIS ajustes em `SPECS`, e eles servem pra
 coisas diferentes:
 
 - **`offset`** posiciona a arma na MAO (X pra dentro/fora, Y pra cima/baixo, Z
   pra perto/longe).
+- **`yaw`** e' o giro em torno de Y que leva o cano pra -Z. Era um booleano
+  `flipped`, o que so' dava conta de peca deitada em X; o primeiro modelo de
+  fora ja' veio deitado em Z e nenhum dos dois valores servia.
 - **`adsOffset`** e' somado a` posicao SO' ao mirar. Existe porque mirar quer a
   linha de visada do modelo passando pelo centro da tela, e o `offset` nao serve
   pra isso: a peca e' centrada pela propria CAIXA, e a alca de mira nao fica no

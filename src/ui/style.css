@@ -447,3 +447,9 @@ kbd {
 }
 /* Renderizacao por software: o numero nao vai melhorar mexendo no jogo. */
 #perf.alerta { border-left-color: var(--danger); color: var(--danger); }
+
+/* Credito de licenca na tela inicial: obrigacao do CC BY do modelo do fuzil. */
+.credito { opacity: .48; margin-top: 14px; line-height: 1.7; }
+.credito b { opacity: .9; font-weight: 400; }
+.credito a { color: var(--accent); text-decoration: none; }
+.credito a:hover { text-decoration: underline; }

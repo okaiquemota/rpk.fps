@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clamp, damp, lerp } from '../core/math';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from './WeaponDefs';
-import type { WeaponModel } from './WeaponModels';
+import { esconder, type WeaponModel } from './WeaponModels';
 
 interface Rig {
   root: THREE.Group;
@@ -389,6 +389,17 @@ export class ViewModel {
     this.reloadAmount = opts.reloading
       ? Math.sin(opts.reloadProgress * Math.PI)
       : damp(this.reloadAmount, 0, 10, dt);
+
+    // Modelo com esqueleto precisa do mixer avancando, senao congela na pose de
+    // repouso — que no AK e' a arma com um pente solto flutuando do lado. So' a
+    // arma na mao: as outras estao invisiveis e nao pagam nada.
+    const modelo = this.models.get(this.current);
+    if (modelo?.mixer) {
+      modelo.mixer.update(dt);
+      // A animacao acabou de reescrever a pose de todos os ossos que ela toca,
+      // inclusive os que devem ficar escondidos. Zerar de novo, depois dela.
+      if (modelo.hidden) esconder(modelo.hidden);
+    }
 
     // troca de arma: sobe da parte de baixo da tela
     this.switchAmount = damp(this.switchAmount, 0, 11, dt);
