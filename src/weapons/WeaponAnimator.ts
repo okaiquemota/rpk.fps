@@ -32,6 +32,25 @@ const ANDANDO = 0.12;
 const CORRENDO = 0.72;
 /** Tempo de crossfade entre poses de base. */
 const FADE = 0.22;
+/**
+ * Crossfade de VOLTA, quando sacar ou recarregar termina. Curto de proposito.
+ *
+ * Com os 0.22 s do fade normal aparecia um piscar do pente: no quadro em que o
+ * clipe acaba, o pente sobressalente — que a animacao acabou de encaixar — e'
+ * escondido, enquanto a base ainda leva 0.22 s trazendo o pente ORIGINAL de
+ * volta pro lugar. No meio disso nao ha' pente nenhum, e o que se ve' e' ele
+ * sumindo e voltando.
+ *
+ * Encurtar o fade nao resolve, so' encurta o buraco (medido: 0.05 s de fade =
+ * 5 quadros sem pente). Manter o sobressalente visivel durante o fade tambem
+ * nao, porque ele sai voando junto. O que fecha e' nao ter fade: no quadro
+ * seguinte a base ja' manda sozinha, o pente original esta' no lugar e o
+ * sobressalente sai de cena no mesmo instante.
+ *
+ * O salto de pose que isso poderia causar nao acontece porque o clipe de
+ * recarga termina praticamente na pose de repouso — medido abaixo.
+ */
+const FADE_VOLTA = 0;
 
 export class WeaponAnimator {
   private mixer: THREE.AnimationMixer;
@@ -97,7 +116,7 @@ export class WeaponAnimator {
       // Terminou de sacar ou recarregar: a base volta de onde parou.
       this.unico = null;
       if (this.base) {
-        acao.crossFadeTo(this.base.reset().play(), FADE, false);
+        acao.crossFadeTo(this.base.reset().play(), FADE_VOLTA, false);
         this.base.setEffectiveWeight(1);
       }
     });

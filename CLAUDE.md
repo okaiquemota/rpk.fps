@@ -258,11 +258,13 @@ A licao e' o metodo: **desligue o suspeito e veja se some**, antes de teorizar
 sobre qual osso e'. O comprimento na tela quase nao mudou (3.5% -> 3.4% da
 altura); o que mudou foi a ESPESSURA, de 2.4% pra 0.9%.
 
-**O modelo traz pecas que o jogo ja' faz — e melhor.** Alem do pente avulso, o
-AK vem com dois CARTUCHOS proprios (cilindros de 0.12 x 0.73 x 0.12,
-`Bone004_04` e `Bone005_05`) que a animacao de tiro cospe. O jogo ja' ejeta
-capsula com pool, fisica e som ao bater no chao; as duas juntas davam municao
-saindo em dobro. Os tres ossos estao em `hiddenBones`.
+**Os cartuchos do modelo e a capsula do jogo dividem o trabalho.** O AK traz
+dois cartuchos proprios (`Bone004_04` e `Bone005_05`) que a animacao cospe pela
+janela de ejecao, presos ao movimento da arma. Eles ficam VISIVEIS: sao melhores
+que a capsula do jogo no momento da ejecao, porque acompanham o ferrolho. O que
+o jogo faz e a animacao nao: voar, quicar e fazer barulho no chao. Por isso os
+dois coexistem — um no receptor, o outro ja' no ar. `hiddenBones` existe pra
+quando essa divisao nao for possivel, mas hoje esta' vazio.
 
 **O clarao do cano era um retangulo, nao um clarao.** Um plano de COR CHAPADA de
 0.3 m, a 37 cm do olho, com escala aleatoria de ate' 1.5: chegava a 72% da
@@ -284,6 +286,16 @@ encaixa na arma; deixado oculto, a recarga mostra o pente velho saindo e nenhum
 entrando. `esconder`/`mostrar` sao chamados por quadro conforme
 `animator.recarregando`, sempre DEPOIS do avanco da animacao — o clipe reescreve
 a pose de todo osso que toca.
+
+**E o FIM da recarga nao pode ter crossfade.** No quadro em que o clipe acaba, o
+pente sobressalente — que a animacao acabou de encaixar — e' escondido, enquanto
+a base leva o tempo do fade trazendo o pente ORIGINAL de volta pro lugar. No meio
+disso nao ha' pente nenhum: ele some e volta. Encurtar o fade so' encurta o
+buraco (0.05 s de fade = 5 quadros medidos sem pente), e manter o sobressalente
+visivel durante o fade tambem nao serve, porque ele sai voando junto. `FADE_VOLTA`
+e' 0 por isso. O salto de pose que isso poderia causar nao existe: medido em
+0.00014 contra 0.005 de movimento normal por quadro — o clipe de recarga termina
+praticamente na pose de repouso.
 
 Medido (`scratchpad/` + `g.update(1/60)` num laco, amplitude de um osso):
 

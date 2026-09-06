@@ -99,13 +99,15 @@ export const SPECS: Record<WeaponId, ModelSpec> = {
   // de o render parecer dizer o contrario. Enquadramento errado se disfarca de
   // orientacao errada.
   rifle: {
-    url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.23],
-    adsOffset: [0.126, -0.1, -0.11], yaw: 0,
-    // Os CARTUCHOS do modelo: cilindros finos de 0.12 x 0.73 x 0.12, que a
-    // animacao cospe a cada tiro. O jogo ja' ejeta capsula propria, com pool,
-    // fisica e som ao bater no chao — as duas juntas davam municao em dobro.
-    // Ficam fora em toda pose, recarga inclusive.
-    hiddenBones: ['Bone004_04', 'Bone005_05'],
+    url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.19],
+    adsOffset: [0.126, -0.1, -0.06], yaw: 0,
+    // Os cartuchos do modelo (`Bone004_04` e `Bone005_05`) ficam VISIVEIS: sao
+    // eles que a animacao cospe pela janela de ejecao, presos ao movimento da
+    // arma. A capsula do jogo continua existindo, mas o papel dela agora e'
+    // outro — voar, quicar e fazer barulho no chao, que e' o que a animacao
+    // nao faz. Dividir assim foi escolha do jogador, e nao ha' duplicata
+    // visivel porque uma vive no receptor e a outra ja' esta' no ar.
+    //
     // O pente avulso: 266 vertices com centro em (-2.74, -3.06, -1.65),
     // enquanto todo o resto da arma vive a menos de uma unidade da origem.
     reloadBones: ['Bone002_01'],
