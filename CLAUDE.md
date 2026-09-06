@@ -136,6 +136,15 @@ E os dois nao sao independentes: `adsOffset` e' somado POR CIMA do `offset`,
 entao mexer no enquadramento do quadril desloca a mira junto e obriga a
 recalcular o `adsOffset` pra manter a visada onde estava.
 
+**Baixar a arma na mira DESALINHA o ferro do reticulo.** O fuzil hoje esta' com a
+boca do cano projetando 3.56 graus ABAIXO do centro da tela na mira — foi um
+pedido explicito de enquadramento, nao um descuido. Como a mira do HUD continua
+visivel durante o ADS e e' ELA que diz onde a bala vai, o ferro do modelo virou
+decoracao: quem apontar pelo ferro erra pra baixo (1.2 m a 20 m). Se um dia isso
+incomodar, ha' dois caminhos — devolver o `adsOffset[1]` ate' a boca voltar pra
+NDC y ~0, ou esconder a mira do HUD no ADS e alinhar o ferro, que e' o que os
+FPS de referencia fazem. Meca com a projecao do `muzzlePoint`, nao no olho.
+
 **So' o fuzil esta' calibrado** (quadril e mira). As outras cinco tem
 `adsOffset: [0, 0, 0]` e seguem no enquadramento antigo — calibrar cada uma e'
 escolher o fator de aproximacao e conferir a visada. Modelos sao mais longos que os rigs

@@ -99,8 +99,8 @@ export const SPECS: Record<WeaponId, ModelSpec> = {
   // de o render parecer dizer o contrario. Enquadramento errado se disfarca de
   // orientacao errada.
   rifle: {
-    url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.278],
-    adsOffset: [0.126, -0.071, -0.17], yaw: 0,
+    url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.23],
+    adsOffset: [0.126, -0.1, -0.11], yaw: 0,
     // Os CARTUCHOS do modelo: cilindros finos de 0.12 x 0.73 x 0.12, que a
     // animacao cospe a cada tiro. O jogo ja' ejeta capsula propria, com pool,
     // fisica e som ao bater no chao — as duas juntas davam municao em dobro.
