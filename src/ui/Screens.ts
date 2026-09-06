@@ -7,6 +7,14 @@ export interface Settings {
   volume: number;
   /** Girar a camera ao levar o mouse ate' a borda (so' vale sem pointer lock). */
   edgeTurn: boolean;
+  /**
+   * Fracao da resolucao nativa em que o jogo e' desenhado (0.5 a 1).
+   *
+   * E' o ajuste de desempenho com mais efeito por clique: o custo do quadro
+   * cresce com a AREA, entao 70% de resolucao e' metade dos pixels. Numa tela
+   * de alta densidade, e' a diferenca entre 10 e 40 fps sem tocar no cenario.
+   */
+  resolution: number;
 }
 
 export interface SaveData {
@@ -16,7 +24,7 @@ export interface SaveData {
 }
 
 const DEFAULTS: SaveData = {
-  settings: { sensitivity: 1, fov: 85, volume: 0.7, edgeTurn: true },
+  settings: { sensitivity: 1, fov: 85, volume: 0.7, edgeTurn: true, resolution: 1 },
   bestWave: 0,
   bestScore: 0,
 };
@@ -97,11 +105,13 @@ export class Screens {
     const sens = $<HTMLInputElement>('sens-slider');
     const fov = $<HTMLInputElement>('fov-slider');
     const vol = $<HTMLInputElement>('vol-slider');
+    const res = $<HTMLInputElement>('res-slider');
     const edge = $<HTMLInputElement>('edge-toggle');
 
     sens.value = String(s.sensitivity);
     fov.value = String(s.fov);
     vol.value = String(Math.round(s.volume * 100));
+    res.value = String(Math.round(s.resolution * 100));
     edge.checked = s.edgeTurn;
     this.refreshSliderLabels();
 
@@ -110,6 +120,7 @@ export class Screens {
         sensitivity: Number(sens.value),
         fov: Number(fov.value),
         volume: Number(vol.value) / 100,
+        resolution: Number(res.value) / 100,
         edgeTurn: edge.checked,
       };
       this.refreshSliderLabels();
@@ -117,7 +128,7 @@ export class Screens {
       this.persist();
     };
 
-    for (const el of [sens, fov, vol]) el.addEventListener('input', emit);
+    for (const el of [sens, fov, vol, res]) el.addEventListener('input', emit);
     edge.addEventListener('change', emit);
   }
 
@@ -126,6 +137,7 @@ export class Screens {
     $('sens-value').textContent = s.sensitivity.toFixed(2);
     $('fov-value').textContent = String(Math.round(s.fov));
     $('vol-value').textContent = String(Math.round(s.volume * 100));
+    $('res-value').textContent = `${Math.round(s.resolution * 100)}%`;
   }
 
   /**

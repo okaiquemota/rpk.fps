@@ -19,6 +19,7 @@ import { Effects } from '../fx/Effects';
 import { HUD } from '../ui/HUD';
 import { warmupWeaponIcons } from '../ui/weaponIcons';
 import { WorldMarkers } from '../ui/WorldMarkers';
+import { PerfMeter } from '../ui/PerfMeter';
 import { Minimap } from '../ui/Minimap';
 import { Compass } from '../ui/Compass';
 import { Screens, type Settings } from '../ui/Screens';
@@ -40,6 +41,7 @@ const _ejectAt = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
 const _listenerFwd = new THREE.Vector3();
 const _listenerUp = new THREE.Vector3();
+const _bufSize = new THREE.Vector2();
 /** A que distancia do olho o clarao e o tracer nascem, em metros. */
 const MUZZLE_WORLD_DISTANCE = 0.85;
 /** Uma linha explicando cada tempero de onda, na hora que ele aparece. */
@@ -81,12 +83,16 @@ export class Game {
   private markers = new WorldMarkers();
   private minimap: Minimap;
   private compass = new Compass();
+  private perf = new PerfMeter(document.getElementById('perf')!);
   private screens = new Screens();
 
   private state: GameState = 'menu';
   private mode: GameMode = 'waves';
   private range: ShootingRange;
   private lastTime = 0;
+  /** Frame REAL, sem o clamp do dt — o medidor precisa do numero cru. */
+  private lastFrameDt = 0;
+  private resolution = 1;
   private accumulatedLook = { dx: 0, dy: 0 };
 
   private score = 0;
@@ -104,8 +110,11 @@ export class Game {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Sem sombra projetada. Ela custava dois preços: um passe extra desenhando
+    // a cena inteira num mapa de 2048, e uma amostragem PCF em CADA pixel do
+    // passe principal. Com a arena toda em BoxGeometry, a luz direcional ja'
+    // separa as faces sozinha — o que se perde e' a sombra no chao.
+    this.renderer.shadowMap.enabled = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -332,6 +341,20 @@ export class Game {
     this.player.camera.fov = s.fov;
     this.player.camera.updateProjectionMatrix();
     this.audio.volume = s.volume;
+    this.resolution = s.resolution;
+    this.applyResolution();
+  }
+
+  /**
+   * Desenha numa resolucao menor que a da tela, deixando o navegador esticar.
+   *
+   * O custo do quadro cresce com a AREA: 70% de resolucao sao 49% dos pixels.
+   * Como o gargalo aqui e' por pixel (a geometria e' de 4 mil triangulos, que
+   * nao derruba nada), este e' o ajuste com mais efeito do jogo inteiro.
+   */
+  private applyResolution(): void {
+    const base = Math.min(window.devicePixelRatio, 2);
+    this.renderer.setPixelRatio(base * this.resolution);
   }
 
   private startRun(mode: GameMode = 'waves'): void {
@@ -713,7 +736,11 @@ export class Game {
     requestAnimationFrame(this.loop);
 
     // Clamp de dt: voltar de uma aba em segundo plano nao pode teleportar todo mundo.
-    const dt = Math.min((now - this.lastTime) / 1000, 1 / 20);
+    // O medidor guarda o valor CRU: com o clamp, um frame de 200ms apareceria
+    // como 50 e o F3 mentiria justamente quando importa.
+    const cru = (now - this.lastTime) / 1000;
+    this.lastFrameDt = cru;
+    const dt = Math.min(cru, 1 / 20);
     this.lastTime = now;
 
     if (this.state === 'upgrading') {
@@ -734,6 +761,7 @@ export class Game {
     if (this.state === 'playing') {
       if (this.input.wasPressed('Escape')) { this.pause(); return; }
       if (this.input.wasPressed('KeyF')) this.toggleFullscreen();
+      if (this.input.wasPressed('F3')) this.perf.toggle();
 
       this.accumulatedLook.dx = this.input.mouseDX;
       this.accumulatedLook.dy = this.input.mouseDY;
@@ -857,6 +885,11 @@ export class Game {
   }
 
   private render(): void {
+    // O info do three zera sozinho a cada render(): le' ANTES do proximo passe,
+    // senao a conta vem so' da arma.
+    const alvo = this.renderer.getDrawingBufferSize(_bufSize);
+    this.perf.sample(this.lastFrameDt, this.renderer.info, alvo.x, alvo.y);
+
     this.renderer.clear();
     this.renderer.render(this.scene, this.player.camera);
 

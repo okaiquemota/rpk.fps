@@ -103,6 +103,9 @@
     <div id="kill-banner"></div>
 
     <div id="center-toast" class="hidden"></div>
+
+    <!-- F3: medidor de desempenho -->
+    <div id="perf" class="hidden"></div>
   </div>
 
   <!-- ================= TELAS ================= -->
@@ -127,6 +130,7 @@
         <div><kbd>R</kbd></div><div>Recarregar</div>
         <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> / <kbd>Scroll</kbd></div><div>Trocar arma</div>
         <div><kbd>F</kbd></div><div>Tela cheia</div>
+        <div><kbd>F3</kbd></div><div>Desempenho (fps)</div>
         <div><kbd>Esc</kbd></div><div>Pausar</div>
       </div>
       <p class="hint">O jogo abre em tela cheia e captura o mouse. Se o navegador nao
@@ -149,6 +153,10 @@
         <label>
           <span>Volume <b id="vol-value">70</b></span>
           <input type="range" id="vol-slider" min="0" max="100" step="1" value="70" />
+        </label>
+        <label>
+          <span>Resolucao <b id="res-value">100%</b></span>
+          <input type="range" id="res-slider" min="50" max="100" step="5" value="100" />
         </label>
         <label class="toggle">
           <span>Girar ao levar o mouse na borda</span>

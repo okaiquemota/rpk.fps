@@ -160,12 +160,9 @@ O que decide a leitura, em ordem de impacto:
 - **Tres TIPOS de peca, nao tres cores da mesma textura**: contentor (nervura
   vertical), engradado (ripa e travessa diagonal) e chapa (rebite). Reconhecer
   a peca de longe e' metade da sensacao de mapa.
-- **Sol baixo.** Sombra longa e' o que faz um patio parecer patio; a pino, tudo
-  achata.
-
-A **contagem de luzes nao mudou** de proposito ao trocar a iluminacao — mudar
-quantas luzes a cena tem recompila todo material (ver Armadilhas). Cor e
-intensidade sao de graca; contagem, nao.
+- **Sol baixo**, e a razao sol/hemisferica. Sem sombra projetada (ver
+  Desempenho), essa razao e' TODO o contraste que existe entre uma face no sol
+  e uma na sombra: hemisferica alta demais e a arena inteira vira o mesmo bege.
 
 Sobre repeticao: mancha grande e' o que mais denuncia uma textura tileada — a
 mesma bolha reaparecendo em catorze painels le' como padrao, enquanto grao fino
@@ -266,6 +263,44 @@ passo fixo e desenha o rastro de cada arma em graus. Testar recuo dentro do jogo
 sob renderizacao por software mede o framerate, nao a arma: a ~1.5 fps o fuzil
 dispara 1.5 tiros por segundo em vez de 12, e o patamar cai junto.
 
+## Desempenho
+
+O jogo nao e' pesado de geometria: **39 desenhos e ~4 mil triangulos** por
+quadro. Isso e' carga trivial, e a logica de CPU (`update`) gasta 0.5 ms. Se o
+fps estiver ruim, o gargalo e' **por pixel** — resolucao, luzes, sombra — e nao
+adianta simplificar o cenario.
+
+**O diagnostico e' esse mesmo confronto**: abra o F3 e compare. Desenhos e
+triangulos baixos com fps baixo = problema por pixel. Só o inverso justifica
+mexer em quantidade de objetos.
+
+O que ja' foi cortado, e por que:
+
+- **Sombra projetada, removida.** Custava dois preços: um passe extra
+  desenhando a cena inteira num mapa de 2048, e uma amostragem PCF em CADA
+  pixel do passe principal. Sozinha, levou os desenhos de 73 pra 39. O que se
+  perde e' a sombra no chao — os objetos ficam menos "plantados".
+- **Luzes de 8 pra 4.** Este e' o custo que NAO aparece em perfil de geometria:
+  a contagem de luzes entra no shader, e cada point light e' avaliada em todo
+  pixel de todo material — **apagada ou nao**. Saíram as duas decorativas de
+  canto e dois dos quatro clarões (`MAX_FLASHES`).
+- **Ajuste de resolucao** (menu de pausa, 50% a 100%). O custo do quadro cresce
+  com a AREA: 70% de resolucao sao 49% dos pixels. Numa tela de alta densidade
+  e' a alavanca mais forte que existe aqui, porque o `setPixelRatio` ja' parte
+  de `devicePixelRatio` (ate' 2) — 4x os pixels de uma tela comum.
+
+**Nao da' pra medir fps neste ambiente.** Sob renderizacao por software o jogo
+roda a ~2 fps por melhor que esteja, e qualquer conclusao tirada dali mede o
+swiftshader. O que VALE medir aqui: `renderer.info.render.calls`,
+`.triangles`, `info.programs.length`, `memory.geometries` e o tempo de CPU do
+`update` — todos independentes de GPU. Fps de verdade, so' com o F3 na maquina
+de quem joga.
+
+Ponta solta conhecida: tirar a sombra deixou 5 geometrias de pool (tracer,
+decal, capsula) subindo pra GPU no primeiro uso em vez de no aquecimento — o
+passe de sombra as forcava antes. Converge em 83 e para, entao e' upload tardio
+e nao vazamento; sao poucos KB, uma vez so'.
+
 ## Armadilhas conhecidas
 
 - **NUNCA mude a quantidade de luzes da cena durante o jogo.** No three, entrar
@@ -275,6 +310,9 @@ dispara 1.5 tiros por segundo em vez de 12, e o patamar cai junto.
   cada inimigo morto. Todas as luzes sao criadas na inicializacao e apagadas com
   `intensity = 0`. Pelo mesmo motivo, materiais nascem com `transparent: true`
   quando forem desaparecer depois: ligar isso em pleno jogo recompila.
+  **Mas luz apagada nao e' luz de graca**: ela segue no laco de luzes do
+  shader, avaliada em cada pixel de cada material. A contagem e' escolha de
+  desempenho, decidida na inicializacao — nao um numero qualquer.
 - **`Game.warmupShaders()` compila tudo na tela de carregamento.** Se voce
   adicionar material, geometria ou tipo de inimigo novo, inclua no aquecimento —
   senao o custo reaparece no meio da partida. Note que ele renderiza um frame de

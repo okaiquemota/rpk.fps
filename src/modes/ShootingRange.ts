@@ -29,7 +29,6 @@ class Plate implements ShootableTarget {
   ) {
     const plate = new THREE.Mesh(plateGeo, face);
     plate.position.y = height / 2;
-    plate.castShadow = true;
     this.group.add(plate);
 
     // Faixa vermelha no alto: marca a zona que vale dobrado, do mesmo jeito que
@@ -140,7 +139,6 @@ export class ShootingRange {
     const mat = this.trackMat(new THREE.MeshStandardMaterial({ color: 0xd8d3c8, roughness: 0.95 }));
     const wall = new THREE.Mesh(this.trackGeo(new THREE.BoxGeometry(15, 8, 0.4)), mat);
     wall.position.set(0, 4, this.wallZ);
-    wall.receiveShadow = true;
     this.group.add(wall);
     this.colliders.push(AABB.fromCenterSize(0, 4, this.wallZ, 15, 8, 0.4));
 

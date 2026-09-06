@@ -110,7 +110,6 @@ export class Level {
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92, metalness: 0.05 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.receiveShadow = true;
     this.group.add(mesh);
     this.geometries.push(geo);
     this.materials.push(mat);
@@ -145,8 +144,6 @@ export class Level {
       scaleBoxUVs(geo, w, wh, d, 4.5);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z);
-      mesh.receiveShadow = true;
-      mesh.castShadow = true;
       this.group.add(mesh);
       this.geometries.push(geo);
       this.baseColliders.push(AABB.fromCenterSize(x, y, z, w, wh, d));
@@ -233,8 +230,6 @@ export class Level {
       scaleBoxUVs(geo, s.w, s.h, s.d, s.color === C_CRATE ? 1.6 : 2.6);
       const mesh = new THREE.Mesh(geo, matByColor.get(s.color)!);
       mesh.position.set(s.x, s.y + s.h / 2, s.z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
       this.propsGroup.add(mesh);
       this.geometries.push(geo);
       this.propColliders.push(AABB.fromFootprint(s.x, s.y, s.z, s.w, s.h, s.d));
@@ -245,40 +240,26 @@ export class Level {
     // three >= r155 usa intensidades fisicas: os valores sao ~PI vezes maiores
     // do que o antigo modo "legacy lights".
     // Ceu azul por cima, quique quente do concreto por baixo.
-    const hemi = new THREE.HemisphereLight(0x9fc0e8, 0x6b5a44, 2.4);
+    //
+    // Sem sombra projetada, a hemisferica e' a unica coisa que separa uma face
+    // virada pro ceu de uma virada pro chao — mas subi-la demais lava a cena.
+    // O contraste que sobrou entre face iluminada e face na sombra e' a razao
+    // sol/hemisferica; alta demais aqui, tudo vira o mesmo bege.
+    const hemi = new THREE.HemisphereLight(0x9fc0e8, 0x6b5a44, 2.2);
     this.group.add(hemi);
 
     // Sol baixo e quente: rasante da sombra mais longa, e sombra longa e' o que
     // faz um patio parecer patio. A pino, tudo achata.
     const sun = new THREE.DirectionalLight(0xffe6bd, 5.2);
     sun.position.set(34, 30, 20);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 140;
-    const s = this.size * 0.72;
-    sun.shadow.camera.left = -s;
-    sun.shadow.camera.right = s;
-    sun.shadow.camera.top = s;
-    sun.shadow.camera.bottom = -s;
-    sun.shadow.bias = -0.0006;
-    sun.shadow.normalBias = 0.03;
     this.group.add(sun);
     this.group.add(sun.target);
 
-    // Preenchimento nos cantos, so' pra abrir a sombra. Antes eram laranja e
-    // azul saturados, um em cada canto: aquilo pintava a arena de neon e dava
-    // cara de fliperama, nao de patio ao sol. A CONTAGEM de luzes segue a mesma
-    // de proposito — mudar quantas luzes a cena tem recompila todo material.
-    const fills: [number, number, number, number][] = [
-      [-22, 6, -22, 0xffd9a8],
-      [22, 6, 22, 0xbfd4ee],
-    ];
-    for (const [x, y, z, color] of fills) {
-      const p = new THREE.PointLight(color, 42, 46, 2);
-      p.position.set(x, y, z);
-      this.group.add(p);
-    }
+    // Nada de luz de preenchimento nos cantos. Ela custava caro pelo motivo que
+    // nao aparece no perfil de geometria: a contagem de luzes entra no SHADER,
+    // e cada point light e' avaliada em todo pixel de todo material — apagada
+    // ou nao. Duas delas por decoracao sao dois lacos por fragmento na tela
+    // inteira, e a hemisferica ja' abre a sombra de graca.
   }
 
   /** Arena completa: obstaculos visiveis e colidindo. */

@@ -435,3 +435,12 @@ kbd {
 .stats span { font-size: 10px; letter-spacing: 2px; opacity: 0.45; }
 .best { font-size: 12px; letter-spacing: 2px; opacity: 0.5; margin-bottom: 22px; }
 .best.new { color: var(--accent); opacity: 1; }
+
+/* --- medidor de desempenho (F3) --- */
+#perf {
+  position: absolute; left: 24px; top: 236px;
+  padding: 7px 11px; font-size: 11px; line-height: 1.7;
+  letter-spacing: 1px; white-space: pre;
+  background: rgba(8, 10, 14, 0.72); border-left: 2px solid var(--good);
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}

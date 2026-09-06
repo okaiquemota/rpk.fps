@@ -134,12 +134,10 @@ export class Enemy {
     const geo = geometriesFor(d.kind);
     this.body = new THREE.Mesh(geo.body, this.bodyMat);
     this.body.position.y = bodyY;
-    this.body.castShadow = true;
     this.group.add(this.body);
 
     this.head = new THREE.Mesh(geo.head, this.headMat);
     this.head.position.y = headY;
-    this.head.castShadow = true;
     this.group.add(this.head);
 
     // "olho" emissivo: da' pra saber pra onde ele esta' olhando de longe
@@ -155,7 +153,6 @@ export class Enemy {
     for (const side of [-1, 1]) {
       const leg = new THREE.Mesh(geo.leg, this.bodyMat);
       leg.position.set(side * w * 0.24, legH * 0.5, 0);
-      leg.castShadow = true;
       this.group.add(leg);
       this.limbs.push(leg);
     }
@@ -164,7 +161,6 @@ export class Enemy {
     for (const side of [-1, 1]) {
       const arm = new THREE.Mesh(geo.arm, this.headMat);
       arm.position.set(side * w * 0.63, bodyY + bodyH * 0.05, 0);
-      arm.castShadow = true;
       this.group.add(arm);
       this.limbs.push(arm);
     }
