@@ -66,8 +66,21 @@ e' o cano. Confirme de lado, com a camera do viewmodel em (1.1, 0, 0) olhando
 pra origem; ali a direita da tela e' -Z, entao o cano tem que apontar pra
 direita.
 
-O enquadramento de cada arma sai do `offset` em `SPECS` (X pra dentro/fora, Y
-pra cima/baixo, Z pra perto/longe). Modelos sao mais longos que os rigs
+O enquadramento de cada arma sai de DOIS ajustes em `SPECS`, e eles servem pra
+coisas diferentes:
+
+- **`offset`** posiciona a arma na MAO (X pra dentro/fora, Y pra cima/baixo, Z
+  pra perto/longe). Z maior = mais perto da camera; o fuzil esta' em 0.1, perto
+  o bastante pra coronha sair pela borda, o que e' de proposito.
+- **`adsOffset`** e' somado a` posicao SO' ao mirar. Existe porque mirar quer a
+  linha de visada do modelo passando pelo centro da tela, e o `offset` nao serve
+  pra isso: a peca e' centrada pela propria CAIXA, e a alca de mira nao fica no
+  centro da caixa — fica em cima e no eixo. Sem esse segundo ajuste o fuzil
+  mirava 4 cm a` esquerda do centro, apontando pro lado do alvo.
+
+**So' o fuzil esta' calibrado** (quadril e mira). As outras cinco tem
+`adsOffset: [0, 0, 0]` e seguem no enquadramento antigo — calibrar cada uma e'
+olhar mirando e mexer nos tres numeros. Modelos sao mais longos que os rigs
 procedurais, entao o angulo de 3/4 do quadril e' menor com eles
 (`MODEL_HIP_YAW`/`MODEL_HIP_PITCH` no `ViewModel`).
 

@@ -29,6 +29,15 @@ interface ModelSpec {
    */
   offset: [number, number, number];
   /**
+   * Correcao aplicada SO' ao mirar, somada a` posicao de mira do ViewModel.
+   *
+   * Mirar quer a linha de visada do modelo passando pelo centro da tela, e o
+   * `offset` acima nao serve pra isso: ele posiciona a arma na MAO, com a peca
+   * centrada pela propria caixa. Como a alca de mira nao fica no centro da
+   * caixa — fica em cima e no eixo —, encostar os dois exige um segundo ajuste.
+   */
+  adsOffset: [number, number, number];
+  /**
    * O pacote NAO e' uniforme: a maioria tem o cano no +X, mas a pistola e a
    * submetralhadora vem com ele no -X. Sem inverter essas duas, elas apontam
    * pras costas do jogador.
@@ -40,12 +49,13 @@ interface ModelSpec {
 }
 
 const SPECS: Record<WeaponId, ModelSpec> = {
-  pistol: { url: pistolUrl, length: 0.26, offset: [-0.02, 0.01, 0.05], flipped: true },
-  deagle: { url: deagleUrl, length: 0.3, offset: [-0.02, 0.01, 0.05], flipped: false },
-  smg: { url: smgUrl, length: 0.44, offset: [-0.03, 0.02, 0.04], flipped: true },
-  rifle: { url: rifleUrl, length: 0.62, offset: [-0.04, 0.025, 0.03], flipped: false },
-  shotgun: { url: shotgunUrl, length: 0.66, offset: [-0.04, 0.025, 0.03], flipped: false },
-  sniper: { url: sniperUrl, length: 0.78, offset: [-0.04, 0.03, 0.03], flipped: false },
+  pistol: { url: pistolUrl, length: 0.26, offset: [-0.02, 0.01, 0.05], adsOffset: [0, 0, 0], flipped: true },
+  deagle: { url: deagleUrl, length: 0.3, offset: [-0.02, 0.01, 0.05], adsOffset: [0, 0, 0], flipped: false },
+  smg: { url: smgUrl, length: 0.44, offset: [-0.03, 0.02, 0.04], adsOffset: [0, 0, 0], flipped: true },
+  // Fuzil: o unico calibrado ate' agora, no quadril e na mira.
+  rifle: { url: rifleUrl, length: 0.62, offset: [-0.04, 0.025, 0.1], adsOffset: [0.04, -0.012, -0.14], flipped: false },
+  shotgun: { url: shotgunUrl, length: 0.66, offset: [-0.04, 0.025, 0.03], adsOffset: [0, 0, 0], flipped: false },
+  sniper: { url: sniperUrl, length: 0.78, offset: [-0.04, 0.03, 0.03], adsOffset: [0, 0, 0], flipped: false },
 };
 
 export interface WeaponModel {
@@ -53,6 +63,8 @@ export interface WeaponModel {
   object: THREE.Object3D;
   /** Ponta do cano, em coordenadas do proprio objeto. */
   muzzle: THREE.Vector3;
+  /** Correcao de posicao ao mirar — ver `adsOffset` em `SPECS`. */
+  adsFix: THREE.Vector3;
 }
 
 /**
@@ -130,5 +142,5 @@ function prepare(scene: THREE.Object3D, spec: ModelSpec): WeaponModel {
   const finalBox = new THREE.Box3().setFromObject(root);
   const muzzle = new THREE.Vector3(0, (finalBox.min.y + finalBox.max.y) / 2, finalBox.min.z);
 
-  return { object: root, muzzle };
+  return { object: root, muzzle, adsFix: new THREE.Vector3(...spec.adsOffset) };
 }

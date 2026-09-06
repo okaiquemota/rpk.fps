@@ -68,6 +68,9 @@ const KICK_ROT_APPLIED = 0.35;// quanto do giro vira inclinacao na tela
 const KICK_ROLL = 4;          // rolagem por radiano do padrao lateral
 const KICK_ROLL_MAX = 0.12;   // teto da rolagem
 
+const _adsAlvo = new THREE.Vector3();
+const _zero = new THREE.Vector3();
+
 /**
  * A arma que voce ve' na tela. Fica pendurada na camera, entao vive em espaco
  * de camera: X pra direita, Y pra cima, Z negativo pra frente.
@@ -390,7 +393,11 @@ export class ViewModel {
     // troca de arma: sobe da parte de baixo da tela
     this.switchAmount = damp(this.switchAmount, 0, 11, dt);
 
-    const base = HIP_POS.clone().lerp(ADS_POS, opts.adsAmount);
+    // A mira tem correcao por arma: a alca de mira do modelo nao cai no centro
+    // da caixa que o posiciona na mao, entao encostar as duas exige um segundo
+    // ajuste. Ver `adsOffset` em WeaponModels.
+    const alvoMira = _adsAlvo.copy(ADS_POS).add(this.models.get(this.current)?.adsFix ?? _zero);
+    const base = HIP_POS.clone().lerp(alvoMira, opts.adsAmount);
     rig.root.position.set(
       base.x + this.bobOffset.x + this.swayX + this.reloadAmount * 0.05,
       base.y + this.bobOffset.y + this.swayY - this.reloadAmount * 0.14 - this.switchAmount * 0.3,
