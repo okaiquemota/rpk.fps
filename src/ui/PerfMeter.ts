@@ -1,3 +1,5 @@
+import { detectRenderer } from '../core/gpu';
+
 /**
  * Medidor de desempenho, ligado no F3.
  *
@@ -12,33 +14,9 @@
  * problema e' por pixel — resolucao, luzes, sombra — e nao adianta simplificar
  * o cenario.
  */
-/**
- * Quem esta' desenhando de verdade.
- *
- * A causa mais comum de "10 fps" num jogo WebGL nao esta' no jogo: e' o
- * navegador caindo pra renderizacao por software (SwiftShader / llvmpipe),
- * porque a aceleracao por hardware esta' desligada ou a GPU esta' na lista de
- * bloqueio. Nesse caso NENHUMA otimizacao de shader resolve, e sem esta linha
- * a pessoa otimiza o jogo por semanas atras de um problema que esta' no
- * chrome://settings.
- */
-function gpuInfo(): { nome: string; software: boolean } {
-  try {
-    const gl = document.createElement('canvas').getContext('webgl2')
-      ?? document.createElement('canvas').getContext('webgl');
-    if (!gl) return { nome: 'sem WebGL', software: true };
-    const ext = gl.getExtension('WEBGL_debug_renderer_info');
-    const nome = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-    const software = /swiftshader|llvmpipe|software|basic render|microsoft basic/i.test(nome);
-    return { nome: nome.replace(/^ANGLE \(|\)$/g, '').slice(0, 46), software };
-  } catch {
-    return { nome: 'desconhecida', software: false };
-  }
-}
-
 export class PerfMeter {
   private el: HTMLElement;
-  private gpu = gpuInfo();
+  private gpu = detectRenderer();
   private frames = 0;
   private acc = 0;
   private pior = 0;

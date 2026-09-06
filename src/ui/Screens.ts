@@ -1,4 +1,5 @@
 import { STORAGE_KEY } from '../config';
+import { detectRenderer } from '../core/gpu';
 import type { Upgrade } from '../player/Stats';
 
 export interface Settings {
@@ -24,7 +25,13 @@ export interface SaveData {
 }
 
 const DEFAULTS: SaveData = {
-  settings: { sensitivity: 1, fov: 85, volume: 0.7, edgeTurn: true, resolution: 1 },
+  // Em renderizacao por software o custo e' todo por pixel: metade da resolucao
+  // sao 25% dos pixels, e e' a diferenca entre injogavel e jogavel. Quem tem
+  // GPU comeca em 100%; quem ja' escolheu um valor mantem o dele.
+  settings: {
+    sensitivity: 1, fov: 85, volume: 0.7, edgeTurn: true,
+    resolution: detectRenderer().software ? 0.5 : 1,
+  },
   bestWave: 0,
   bestScore: 0,
 };

@@ -265,12 +265,20 @@ O que ja' foi cortado, e por que:
   de `devicePixelRatio` (ate' 2) — 4x os pixels de uma tela comum.
 
 **A primeira pergunta nao e' sobre o jogo: e' quem esta' desenhando.** O F3
-mostra o nome do renderizador, e acende em vermelho quando o navegador caiu pra
-software (SwiftShader, llvmpipe). Nesse estado o jogo roda a ~2 fps por melhor
-que esteja, e nenhuma otimizacao de shader muda isso — o conserto e' ligar a
-aceleracao por hardware no navegador. Vale checar ANTES de mexer em qualquer
-coisa; sem essa linha da' pra otimizar por semanas atras de um problema que
-esta' no `chrome://settings`.
+mostra o nome do renderizador e acende em vermelho quando o navegador caiu pra
+software — SwiftShader, llvmpipe, ou "Microsoft Basic Render Driver" (WARP) no
+Windows. Nesse estado cada pixel sai da CPU e nenhuma otimizacao de shader muda
+a ordem de grandeza.
+
+**Isso ja' aconteceu de verdade neste projeto**, e custou uma rodada inteira de
+otimizacao errada: 13 fps com a aceleracao por hardware desligada. Ligar a
+aceleracao no navegador resolveu na hora. Antes disso foram removidas as sombras
+e metade das luzes, e a arena foi revertida do visual novo — tudo por causa de
+um problema que nao estava no jogo. **Cheque o F3 primeiro.**
+
+Quando a deteccao acusa software, o jogo ja' nasce adaptado: resolucao em 50% e
+sem suavizacao de serrilhado, que sao os dois maiores custos por pixel. Quem tem
+GPU nao ve' diferenca nenhuma — os dois ajustes sao condicionais.
 
 **Nao da' pra medir fps neste ambiente.** Sob renderizacao por software o jogo
 roda a ~2 fps por melhor que esteja, e qualquer conclusao tirada dali mede o

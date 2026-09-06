@@ -20,6 +20,7 @@ import { HUD } from '../ui/HUD';
 import { warmupWeaponIcons } from '../ui/weaponIcons';
 import { WorldMarkers } from '../ui/WorldMarkers';
 import { PerfMeter } from '../ui/PerfMeter';
+import { detectRenderer } from './gpu';
 import { Minimap } from '../ui/Minimap';
 import { Compass } from '../ui/Compass';
 import { Screens, type Settings } from '../ui/Screens';
@@ -107,7 +108,12 @@ export class Game {
   constructor(canvas: HTMLCanvasElement, models: Map<WeaponId, WeaponModel> = new Map()) {
     this.viewModel = new ViewModel(models);
     // ---------- renderer ----------
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    // Sem GPU, cada amostra extra de suavizacao e' trabalho de CPU multiplicado
+    // pela tela inteira — e' dos custos mais caros que existem em software.
+    const gpu = detectRenderer();
+    this.renderer = new THREE.WebGLRenderer({
+      canvas, antialias: !gpu.software, powerPreference: 'high-performance',
+    });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     // Sem sombra projetada. Ela custava dois preços: um passe extra desenhando
