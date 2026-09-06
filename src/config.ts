@@ -83,4 +83,22 @@ export const FX = {
   screenShakeDecay: 7,
 } as const;
 
+/**
+ * Modo confronto: partida contra soldados armados, sem ondas.
+ *
+ * A diferenca de ritmo pra sobrevivencia esta' toda aqui: um efetivo pequeno e
+ * constante em vez de horda, e voce VOLTA quando morre — quem termina a partida
+ * e' o placar ou o relogio, nao a sua vida.
+ */
+export const FIREFIGHT = {
+  /** Soldados em campo ao mesmo tempo. */
+  aliveTarget: 5,
+  /** Abates que encerram a partida. */
+  killTarget: 25,
+  /** Duracao da rodada, em segundos. */
+  roundSeconds: 300,
+  /** Tempo caido antes de voltar em campo. */
+  respawnDelay: 2.4,
+} as const;
+
 export const STORAGE_KEY = 'rpk.fps.save.v1';

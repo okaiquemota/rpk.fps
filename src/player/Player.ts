@@ -88,6 +88,27 @@ export class Player {
     return out.set(-Math.sin(y) * Math.cos(p), Math.sin(p), -Math.cos(y) * Math.cos(p)).normalize();
   }
 
+  /**
+   * Volta a viver sem zerar a partida.
+   *
+   * `respawn()` abaixo e' reinicio de PARTIDA: apaga melhorias, tranca as armas
+   * de novo e devolve a pistola. No confronto morrer e' rotina, e perder o
+   * arsenal a cada tombo nao seria punicao, seria outro jogo.
+   */
+  revive(): void {
+    this.velocity.set(0, 0, 0);
+    this.pitch = 0;
+    this.health = this.maxHealth;
+    this.armor = 0;
+    this.alive = true;
+    this.crouching = false;
+    this.currentHeight = PLAYER.heightStand;
+    this.timeSinceDamage = 99;
+    this.recoilPitch = this.recoilYaw = this.recoilPitchTarget = this.recoilYawTarget = 0;
+    this.adsAmount = 0;
+    for (const w of this.weapons.values()) w.reset();
+  }
+
   respawn(): void {
     this.position.copy(this.level.playerStart);
     this.velocity.set(0, 0, 0);

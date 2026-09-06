@@ -1,4 +1,4 @@
-export type EnemyKind = 'grunt' | 'runner' | 'shooter' | 'brute';
+export type EnemyKind = 'grunt' | 'runner' | 'shooter' | 'brute' | 'soldier';
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -73,5 +73,18 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: 30, radius: 0.68, height: 2.5, score: 400,
     color: 0x3a3733, gearColor: 0x201e1c, eyeColor: 0xb8452f, ranged: false, projectileSpeed: 0,
     dropChance: 0.6, minWave: 5, weight: 4,
+  },
+  /**
+   * Inimigo do modo CONFRONTO: nao corre pra cima, atira de longe.
+   *
+   * Nao entra no sorteio das ondas (`weight: 0`) — la' o jogo e' de horda, e
+   * uma horda que atira de 22 m nao da' pra jogar. Aqui ele e' o unico tipo.
+   */
+  soldier: {
+    kind: 'soldier', name: 'SOLDADO',
+    health: 55, speed: 3.6, attackRange: 22, attackCooldown: 1.05, windup: 0.34,
+    damage: 9, radius: 0.4, height: 1.78, score: 150,
+    color: 0x555b46, gearColor: 0x2b2e26, eyeColor: 0xc9503a, ranged: true, projectileSpeed: 27,
+    dropChance: 0.2, minWave: 99, weight: 0,
   },
 };

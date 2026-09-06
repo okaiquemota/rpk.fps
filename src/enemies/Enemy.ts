@@ -26,6 +26,7 @@ interface EnemyGeometry {
   leg: THREE.BoxGeometry;
   arm: THREE.BoxGeometry;
   vest: THREE.BoxGeometry;
+  gun: THREE.BoxGeometry;
 }
 const geometryCache = new Map<EnemyKind, EnemyGeometry>();
 
@@ -47,6 +48,9 @@ function geometriesFor(kind: EnemyKind): EnemyGeometry {
     eye: new THREE.BoxGeometry(w * 0.5, H * 0.17 * 0.2, 0.05),
     // Colete: um pouco mais largo que o tronco e bem fino, so' na frente.
     vest: new THREE.BoxGeometry(w * 1.04, H * 0.24, w * 0.78),
+    // Arma, so' pra quem atira de longe. Uma caixa comprida basta: o que da'
+    // leitura a essa distancia e' a silhueta apontada pra frente, nao o detalhe.
+    gun: new THREE.BoxGeometry(w * 0.16, w * 0.2, H * 0.42),
     leg: new THREE.BoxGeometry(w * 0.3, H * 0.42, w * 0.3),
     arm: new THREE.BoxGeometry(w * 0.24, H * 0.38 * 0.85, w * 0.24),
   };
@@ -58,7 +62,7 @@ function geometriesFor(kind: EnemyKind): EnemyGeometry {
 export function disposeEnemyGeometries(): void {
   for (const g of geometryCache.values()) {
     g.body.dispose(); g.head.dispose(); g.eye.dispose(); g.leg.dispose(); g.arm.dispose();
-    g.vest.dispose();
+    g.vest.dispose(); g.gun.dispose();
   }
   geometryCache.clear();
 }
@@ -183,6 +187,16 @@ export class Enemy {
       arm.castShadow = true;
       this.group.add(arm);
       this.limbs.push(arm);
+    }
+
+    // Arma na mao direita, deitada pra frente. Fica FORA de `limbs` de
+    // proposito: os membros balancam na caminhada, e uma arma balancando junto
+    // aponta pro chao no meio do passo.
+    if (d.ranged) {
+      const gun = new THREE.Mesh(geo.gun, this.headMat);
+      gun.position.set(w * 0.63, bodyY + bodyH * 0.05, -w * 0.55);
+      gun.castShadow = true;
+      this.group.add(gun);
     }
 
     this.group.scale.setScalar(0.01); // cresce ao nascer

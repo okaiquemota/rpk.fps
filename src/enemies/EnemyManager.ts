@@ -69,6 +69,14 @@ export class EnemyManager {
   modifier: WaveModifier = 'normal';
   private pendingSpawns: EnemyKind[] = [];
   private spawnTimer = 0;
+  /**
+   * Modo confronto: sem ondas, um efetivo constante em campo.
+   *
+   * Zero desliga. Ligado, o gerenciador ignora a maquina de ondas inteira e so'
+   * repoe soldado ate' o numero pedido — quem termina a partida e' o placar do
+   * Game, nao a lista de spawns.
+   */
+  private skirmishSize = 0;
   private breakTimer: number = WAVES.firstWaveDelay;
   private waveActive = false;
 
@@ -119,8 +127,10 @@ export class EnemyManager {
       Math.round((WAVES.baseEnemies + (wave - 1) * WAVES.enemiesPerWave) * mod.countMult),
       2, WAVES.maxPerWave,
     );
+    // `weight: 0` mantem um tipo fora do sorteio das ondas de vez — e' assim que
+    // o soldado, que so' existe no modo confronto, nunca aparece aqui.
     const available = (Object.keys(ENEMY_DEFS) as EnemyKind[])
-      .filter((k) => wave >= ENEMY_DEFS[k].minWave);
+      .filter((k) => ENEMY_DEFS[k].weight > 0 && wave >= ENEMY_DEFS[k].minWave);
 
     // Sorteio ponderado — tipos novos aparecem mais assim que desbloqueiam.
     const pool: EnemyKind[] = [];
@@ -156,6 +166,13 @@ export class EnemyManager {
     return list;
   }
 
+  /** Liga o confronto com `size` inimigos em campo. 0 volta pras ondas. */
+  setSkirmish(size: number): void {
+    this.skirmishSize = size;
+    this.waveActive = false;
+    this.pendingSpawns.length = 0;
+  }
+
   startNextWave(): void {
     this.waveIndex++;
     this.modifier = this.rollModifier(this.waveIndex);
@@ -173,9 +190,14 @@ export class EnemyManager {
     const source = candidates.length > 0 ? candidates : this.level.spawnPoints;
     const spot = pick(source);
 
-    const healthScale = (1 + (this.waveIndex - 1) * WAVES.healthPerWave)
-      * MODIFIERS[this.modifier].healthMult;
-    const speedScale = Math.min(1.45, 1 + (this.waveIndex - 1) * WAVES.speedPerWave);
+    // No confronto nao ha onda: todo soldado nasce igual, e a dificuldade vem
+    // de eles atirarem de volta.
+    const healthScale = this.skirmishSize > 0
+      ? 1
+      : (1 + (this.waveIndex - 1) * WAVES.healthPerWave) * MODIFIERS[this.modifier].healthMult;
+    const speedScale = this.skirmishSize > 0
+      ? 1
+      : Math.min(1.45, 1 + (this.waveIndex - 1) * WAVES.speedPerWave);
 
     const pos = new THREE.Vector3(
       spot.x + randRange(-1.5, 1.5), 0.05, spot.z + randRange(-1.5, 1.5),
@@ -190,7 +212,15 @@ export class EnemyManager {
 
   update(dt: number, playerPosition: THREE.Vector3, playerAlive: boolean): void {
     // ---- ritmo das ondas ----
-    if (!this.waveActive) {
+    if (this.skirmishSize > 0) {
+      // Confronto: repoe quem caiu, com um respiro entre um e outro pra nao
+      // materializar tres soldados no mesmo instante.
+      this.spawnTimer -= dt;
+      if (playerAlive && this.spawnTimer <= 0 && this.aliveCount < this.skirmishSize) {
+        this.spawnOne('soldier', playerPosition);
+        this.spawnTimer = 0.9;
+      }
+    } else if (!this.waveActive) {
       this.breakTimer -= dt;
       if (this.breakTimer <= 0 && playerAlive) this.startNextWave();
     } else {
@@ -263,6 +293,7 @@ export class EnemyManager {
     this.enemies.length = 0;
     this.pendingSpawns.length = 0;
     this.waveIndex = 0;
+    this.skirmishSize = 0;
     this.modifier = 'normal';
     this.waveActive = false;
     this.breakTimer = WAVES.firstWaveDelay;

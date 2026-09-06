@@ -183,8 +183,39 @@ antes de perceber que o ponto de vista e' que estava dentro do cenario. Use o
 
 ## Modos
 
-`GameMode` em `Game.ts` decide o que roda: `waves` (ondas) ou `range` (campo de
-tiro, em `src/modes/ShootingRange.ts`).
+`GameMode` em `Game.ts` decide o que roda: `waves` (sobrevivencia contra horda),
+`firefight` (confronto contra soldados armados) ou `range` (campo de tiro, em
+`src/modes/ShootingRange.ts`).
+
+### Confronto
+
+Sobrevivencia e' horda que corre pra cima; confronto e' tiroteio contra quem
+atira de volta. As diferencas que fazem os dois nao serem o mesmo modo com
+outra cor:
+
+- **Sem ondas.** `EnemyManager.setSkirmish(n)` desliga a maquina de ondas
+  inteira e so' repoe soldado ate' `n` em campo. Ninguem escala de vida ou
+  velocidade: a dificuldade vem de levarem tiro de volta, nao de inflar numero.
+- **Voce VOLTA ao morrer.** Quem termina a partida e' o placar (`killTarget`) ou
+  o relogio (`roundSeconds`), nunca a sua vida. Por isso morrer usa
+  `Player.revive()`, e NAO `respawn()` — o segundo e' reinicio de partida, apaga
+  melhorias e tranca as armas de novo; num modo onde se morre toda hora, isso
+  seria outro jogo.
+- **Ao respawnar, o ponto de volta e' o mais LONGE de quem esta' vivo.** Sem
+  escolher, dava pra nascer no meio do tiroteio e morrer antes de encostar no
+  teclado.
+- **Todas as armas liberadas.** Entrar de pistola contra cinco fuzis nao e'
+  desafio, e' pedagio.
+- O placar `BL x GR` do HUD, que existia sem uso desde o comeco, e' o daqui:
+  seus abates de um lado, seus tombos do outro, com o cronometro no meio.
+
+O soldado e' um `EnemyKind` como os outros, com `weight: 0` — e' isso que o
+mantem fora do sorteio das ondas. Uma horda que atira de 22 m nao da' pra jogar.
+
+**Armadilha que ja' custou caro:** o `respawnIntoFight` precisa devolver
+`state = 'playing'`. Sem isso o laco de morte reentra a cada quadro e respawna
+sem parar — o placar do inimigo subia de 3 pra 13 sozinho em segundos e o
+relogio congelava.
 
 O campo de tiro precisa de espaco LIMPO: `Level.useRangeLayout()` esconde os
 obstaculos da arena e troca os colisores pelos do modo. Sem isso, metade dos
@@ -364,3 +395,16 @@ e nao vazamento; sao poucos KB, uma vez so'.
 O jogo expõe `window.__RPK` (a instância de `Game`). Num teste de navegador dá
 pra spawnar inimigos, teleportar o jogador, disparar `g.combat.fire(...)` e ler
 `player.health` / `enemies.enemies` direto. É assim que o combate foi validado.
+
+**Sob renderizacao por software, esperar o relogio nao funciona.** O `dt` e'
+limitado a 1/20 por quadro, e a ~1.5 fps isso faz 23 segundos reais virarem 2 de
+jogo — nada da' tempo de acontecer, e o teste conclui que o sistema esta' morto
+quando ele so' esta' em camera lenta. Chame `g.update(1/60)` num laco pra
+avancar o tempo de JOGO sem pagar rasterizacao:
+
+```js
+for (let t = 0; t < segundos; t += 1 / 60) g.update(1 / 60);
+```
+
+Foi assim que o confronto foi validado — e foi so' assim que o respawn em laco
+apareceu.

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { PLAYER, WORLD } from '../config';
+import { PLAYER, WORLD, FIREFIGHT } from '../config';
 import { AABB, clamp, randRange } from './math';
 import { Input } from './Input';
 import { AudioManager } from './Audio';
@@ -30,7 +30,11 @@ import { ShootingRange } from '../modes/ShootingRange';
 type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'upgrading';
 
 /** Sobrevivencia por ondas, ou campo de tiro pra testar armas. */
-export type GameMode = 'waves' | 'range';
+/**
+ * `waves` e' a sobrevivencia contra horda; `range`, o campo de tiro; e
+ * `firefight`, o confronto contra soldados que atiram de volta.
+ */
+export type GameMode = 'waves' | 'range' | 'firefight';
 
 const COMBO_WINDOW = 4;
 const MAX_COMBO = 10;
@@ -103,6 +107,9 @@ export class Game {
   private shotsFired = 0;
   private shotsHit = 0;
   private deathTimer = 0;
+  /** Confronto: segundos restantes, abates do time inimigo (suas mortes). */
+  private roundTime = 0;
+  private enemyScore = 0;
   private wasInFallback = false;
 
   constructor(canvas: HTMLCanvasElement, models: Map<WeaponId, WeaponModel> = new Map()) {
@@ -224,6 +231,7 @@ export class Game {
 
     this.screens.onPlay = () => this.startRun('waves');
     this.screens.onPlayRange = () => this.startRun('range');
+    this.screens.onPlayFight = () => this.startRun('firefight');
     this.screens.onResume = () => this.resume();
     this.screens.onRestart = () => this.startRun(this.mode);
     this.screens.onSettingsChange = (s) => this.applySettings(s);
@@ -379,19 +387,31 @@ export class Game {
     this.shotsFired = 0;
     this.shotsHit = 0;
     this.deathTimer = 0;
+    this.roundTime = FIREFIGHT.roundSeconds;
+    this.enemyScore = 0;
+    this.enemies.setSkirmish(mode === 'firefight' ? FIREFIGHT.aliveTarget : 0);
 
     this.range.reset();
     this.range.group.visible = mode === 'range';
     this.combat.setExtraTargets(mode === 'range' ? this.range.targets : []);
     if (mode === 'range') this.level.useRangeLayout(this.range.colliders);
     else this.level.useArenaLayout();
-    this.minimap.setLabel(mode === 'range' ? 'CAMPO DE TIRO' : 'ARENA');
+    this.minimap.setLabel(
+      mode === 'range' ? 'CAMPO DE TIRO' : mode === 'firefight' ? 'CONFRONTO' : 'ARENA',
+    );
 
     if (mode === 'range') {
       // No campo de tiro voce chega com tudo na mao: o proposito e' comparar
       // armas, nao desbloquear.
       this.player.position.copy(this.range.spawn);
       this.player.yaw = 0;
+      for (const w of this.player.weapons.values()) {
+        w.unlocked = true;
+        w.reset();
+      }
+    } else if (mode === 'firefight') {
+      // Confronto e' duelo de armas, nao progressao: entrar de pistola contra
+      // cinco fuzis nao e' desafio, e' pedagio.
       for (const w of this.player.weapons.values()) {
         w.unlocked = true;
         w.reset();
@@ -409,6 +429,8 @@ export class Game {
     this.input.requestLock(true);
     if (mode === 'range') {
       this.hud.showToast('CAMPO DE TIRO', 'Todas as armas liberadas · municao infinita · L limpa a parede');
+    } else if (mode === 'firefight') {
+      this.hud.showToast('CONFRONTO', `Eles atiram de volta · ${FIREFIGHT.killTarget} abates vence`);
     } else {
       this.hud.showToast('SOBREVIVA', 'A primeira onda chega em instantes');
     }
@@ -453,6 +475,34 @@ export class Game {
     this.audio.playerDeath();
     this.effects.addShake(0.8);
     this.input.releaseLock();
+  }
+
+  /**
+   * Volta pro combate depois de cair, no ponto mais longe de quem esta' vivo.
+   *
+   * Nascer no meio do tiroteio e' pior que esperar: sem escolher o ponto, dava
+   * pra morrer de novo antes de encostar no teclado.
+   */
+  private respawnIntoFight(): void {
+    this.enemyScore++;
+    this.deathTimer = 0;
+    // Sem voltar o estado pra 'playing', o laco de morte reentra a cada quadro e
+    // respawna sem parar — o placar do inimigo subia sozinho de 3 pra 13 em
+    // segundos, e o relogio da rodada congelava.
+    this.state = 'playing';
+    this.player.revive();
+
+    let melhor = this.level.playerStart;
+    let maiorDistancia = -1;
+    for (const ponto of this.level.spawnPoints) {
+      let perto = Infinity;
+      for (const inimigo of this.enemies.enemies) {
+        if (inimigo.isAlive) perto = Math.min(perto, ponto.distanceToSquared(inimigo.position));
+      }
+      if (perto > maiorDistancia) { maiorDistancia = perto; melhor = ponto; }
+    }
+    this.player.position.set(melhor.x, 0.05, melhor.z);
+    this.hud.showToast('EM CAMPO', '');
   }
 
   private finishRun(): void {
@@ -784,7 +834,20 @@ export class Game {
       // morto: o mundo continua rodando, a camera cai
       player.updateMovement(this.input, dt);
       this.deathTimer += dt;
-      if (this.deathTimer > 2.2) {
+      // No confronto morrer nao encerra nada: custa um ponto pro outro lado e
+      // voce volta. Quem termina a partida e' o placar ou o relogio.
+      if (this.mode === 'firefight') {
+        if (this.deathTimer > FIREFIGHT.respawnDelay) this.respawnIntoFight();
+      } else if (this.deathTimer > 2.2) {
+        this.state = 'menu';
+        this.finishRun();
+        return;
+      }
+    }
+
+    if (this.mode === 'firefight' && this.state === 'playing') {
+      this.roundTime = Math.max(0, this.roundTime - dt);
+      if (this.kills >= FIREFIGHT.killTarget || this.roundTime <= 0) {
         this.state = 'menu';
         this.finishRun();
         return;
@@ -861,16 +924,28 @@ export class Game {
     // So' o topo da tela muda entre os modos. Mira, giro de borda e slots de
     // arma valem nos dois — e no campo de tiro a mira abrindo com o recuo e'
     // justamente o que se quer observar.
-    this.hud.setTeamScore(null);
+    if (this.mode === 'firefight') {
+      // O placar BL x GR do HUD existia sem uso desde o comeco; e' aqui que ele
+      // serve: seus abates de um lado, os seus tombos do outro.
+      const m = Math.floor(this.roundTime / 60);
+      const seg = Math.floor(this.roundTime % 60);
+      this.hud.setTeamScore(this.kills, this.enemyScore, `${m}:${String(seg).padStart(2, '0')}`);
+    } else {
+      this.hud.setTeamScore(null);
+    }
     if (this.mode === 'range') {
       this.hud.setRangeStats(this.range.stats);
       this.hud.setWave(0, 0, 'TREINO');
     } else {
       this.hud.setRangeStats(null);
-      this.hud.setWave(
-        Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave,
-        this.enemies.modifierLabel,
-      );
+      // No confronto quem ocupa o topo e' o placar; a linha de onda nao tem o
+      // que dizer, mas pontos e abates continuam valendo.
+      if (this.mode !== 'firefight') {
+        this.hud.setWave(
+          Math.max(1, this.enemies.waveIndex), this.enemies.remainingInWave,
+          this.enemies.modifierLabel,
+        );
+      }
       this.hud.setScore(this.score, this.kills, this.combo);
     }
 
