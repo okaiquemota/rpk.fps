@@ -10,11 +10,13 @@ interface Rig {
 }
 
 /**
- * Onde a arma fica no quadril. Mais baixa e um pouco mais afastada do que ja'
- * esteve: subindo demais, o cano cruza a tela na diagonal e encosta na mira —
- * a referencia (CrossFire) mantem a arma no canto de baixo, quase deitada.
+ * Onde a arma fica no quadril: baixa, no canto, e BEM perto da camera.
+ *
+ * Perto o bastante pra coronha sair pela borda — e' de proposito. Enquadrar a
+ * arma inteira na tela e' o que a fazia parecer pequena e distante; deixar o
+ * corte acontecer e' o que da' presenca, e e' o que os FPS de referencia fazem.
  */
-const HIP_POS = new THREE.Vector3(0.25, -0.235, -0.42);
+const HIP_POS = new THREE.Vector3(0.25, -0.235, -0.28);
 const ADS_POS = new THREE.Vector3(0, -0.1, -0.3);
 /** Angulo de 3/4 no quadril; some ao mirar, quando a arma alinha com a mira. */
 const HIP_YAW = -0.16;
@@ -43,6 +45,28 @@ const SWAY_GAIN = 0.0007;   // quanto a arma fica pra tras ao girar o mouse
 const SWAY_LIMIT = 0.028;   // teto do arrasto, em metros
 const SWAY_TILT = 1.6;      // giro que o arrasto lateral provoca
 const SWAY_ROLL = 1.2;      // inclinacao que o arrasto vertical provoca
+
+/**
+ * Quanto a arma pula ao disparar.
+ *
+ * Isto e' SO' aparencia — o recuo que move a mira vive no `Weapon`/`Player`, e
+ * nao passa por aqui. Exagerar so' atrapalha: a arma tapa a tela justo no
+ * instante em que se quer ver onde o tiro foi parar.
+ *
+ * Cuidado com a diferenca entre PASSO e TETO. Baixar so' o teto do recuo pra
+ * tras nao mudou nada: numa rajada de fuzil o patamar fica em ~8.7 cm, abaixo
+ * de qualquer teto que se tinha posto. Quem manda ali e' o passo por tiro.
+ *
+ * E o recuo pra tras pesa mais agora do que ja' pesou: com a arma a 28 cm da
+ * camera, 6 cm de deslize sao um quinto da distancia.
+ */
+const KICK_BACK = 0.45;       // fracao do kickback que vira recuo visual
+const KICK_BACK_MAX = 0.08;   // teto do recuo, em metros
+const KICK_ROT = 1.1;         // giro por unidade de kickback
+const KICK_ROT_MAX = 0.22;    // teto do giro, em radianos
+const KICK_ROT_APPLIED = 0.35;// quanto do giro vira inclinacao na tela
+const KICK_ROLL = 4;          // rolagem por radiano do padrao lateral
+const KICK_ROLL_MAX = 0.12;   // teto da rolagem
 
 /**
  * A arma que voce ve' na tela. Fica pendurada na camera, entao vive em espaco
@@ -306,14 +330,14 @@ export class ViewModel {
   }
 
   onFire(kickback: number): void {
-    this.recoilOffset = Math.min(this.recoilOffset + kickback, 0.3);
-    this.recoilRot = Math.min(this.recoilRot + kickback * 2.6, 0.6);
+    this.recoilOffset = Math.min(this.recoilOffset + kickback * KICK_BACK, KICK_BACK_MAX);
+    this.recoilRot = Math.min(this.recoilRot + kickback * KICK_ROT, KICK_ROT_MAX);
     this.flashTimer = 0.055;
   }
 
   /** Inclina a arma pro lado pra onde o padrao esta' puxando. */
   onRecoilSide(yaw: number): void {
-    this.recoilRoll = clamp(this.recoilRoll + yaw * 9, -0.28, 0.28);
+    this.recoilRoll = clamp(this.recoilRoll + yaw * KICK_ROLL, -KICK_ROLL_MAX, KICK_ROLL_MAX);
   }
 
   onReloadStart(): void { this.reloadAmount = 1; }
@@ -377,7 +401,7 @@ export class ViewModel {
     const hipPitch = usaModelo ? MODEL_HIP_PITCH : HIP_PITCH;
     const hipYaw = usaModelo ? MODEL_HIP_YAW : HIP_YAW;
     rig.root.rotation.set(
-      hipPitch * hip + this.recoilRot * 0.35 + this.reloadAmount * 0.75 + this.switchAmount * 0.4,
+      hipPitch * hip + this.recoilRot * KICK_ROT_APPLIED + this.reloadAmount * 0.75 + this.switchAmount * 0.4,
       hipYaw * hip - this.swayX * SWAY_TILT + this.reloadAmount * 0.3,
       this.swayY * SWAY_ROLL - this.reloadAmount * 0.35 + this.recoilRoll,
     );
