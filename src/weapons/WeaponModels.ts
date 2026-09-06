@@ -58,18 +58,28 @@ export interface ModelSpec {
    */
   yaw: number;
   /**
-   * Ossos cuja geometria nao deve aparecer.
+   * Ossos cuja geometria NUNCA deve aparecer.
    *
-   * Existe por causa de uma pratica comum em modelo de FPS animado: o autor
-   * inclui um SEGUNDO pente, solto no ar ao lado da arma, que so' entra em cena
-   * durante a recarga. Em toda outra pose ele fica flutuando — e, pior que
-   * feio, ele entra na caixa que escala e centra o modelo, entao a arma sai
-   * encolhida e descentrada sem que nada pareca errado no codigo.
+   * Modelo de FPS animado costuma trazer peca que o jogo ja' faz melhor — no
+   * AK, dois cartuchos que a animacao de tiro cospe, enquanto o jogo ja' ejeta
+   * capsula com pool, fisica e som.
    *
    * A lista e' explicita, e nao adivinhada por heuristica: esconder osso errado
    * apaga parte da arma, e isso e' pior que o problema.
    */
   hiddenBones?: readonly string[];
+  /**
+   * Ossos escondidos EXCETO durante a recarga.
+   *
+   * O segundo pente, solto no ar ao lado da arma, e' o caso: em qualquer outra
+   * pose ele fica boiando, mas na recarga e' justamente ele que a animacao
+   * encaixa — escondido ali, o clipe tira o pente velho e nao poe nenhum.
+   *
+   * Precisa ser uma lista SEPARADA de `hiddenBones`. Com as duas juntas, a
+   * recarga revelava os cartuchos tambem, e a municao do modelo voltava a
+   * aparecer no unico momento em que ninguem esperava.
+   */
+  reloadBones?: readonly string[];
 }
 
 /**
@@ -91,17 +101,14 @@ export const SPECS: Record<WeaponId, ModelSpec> = {
   rifle: {
     url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.278],
     adsOffset: [0.126, -0.071, -0.17], yaw: 0,
-    // Tres pecas que o modelo traz e o jogo ja' faz melhor, ou nao deveria
-    // mostrar. Medidas, nao adivinhadas:
-    //
-    // - `Bone002_01`: o pente avulso da animacao de recarga. 266 vertices com
-    //   centro em (-2.74, -3.06, -1.65), enquanto todo o resto da arma vive a
-    //   menos de uma unidade da origem. Volta a aparecer durante a recarga;
-    // - `Bone004_04` e `Bone005_05`: cilindros finos de 0.12 x 0.73 x 0.12 —
-    //   os CARTUCHOS do modelo, que a animacao de tiro cospe. O jogo ja' ejeta
-    //   capsula propria, com pool, fisica e som ao bater no chao; as duas
-    //   juntas davam munição saindo em dobro.
-    hiddenBones: ['Bone002_01', 'Bone004_04', 'Bone005_05'],
+    // Os CARTUCHOS do modelo: cilindros finos de 0.12 x 0.73 x 0.12, que a
+    // animacao cospe a cada tiro. O jogo ja' ejeta capsula propria, com pool,
+    // fisica e som ao bater no chao — as duas juntas davam municao em dobro.
+    // Ficam fora em toda pose, recarga inclusive.
+    hiddenBones: ['Bone004_04', 'Bone005_05'],
+    // O pente avulso: 266 vertices com centro em (-2.74, -3.06, -1.65),
+    // enquanto todo o resto da arma vive a menos de uma unidade da origem.
+    reloadBones: ['Bone002_01'],
   },
   shotgun: { url: shotgunUrl, length: 0.66, offset: [-0.04, 0.025, 0.03], adsOffset: [0, 0, 0], yaw: Math.PI / 2 },
   sniper: { url: sniperUrl, length: 0.78, offset: [-0.04, 0.03, 0.03], adsOffset: [0, 0, 0], yaw: Math.PI / 2 },
@@ -121,14 +128,13 @@ export interface WeaponModel {
    */
   animator?: WeaponAnimator;
   /**
-   * Ossos de `hiddenBones`, com a escala original guardada.
-   *
-   * Precisam ser escondidos DE NOVO depois de cada quadro de animacao: o clipe
-   * reescreve a pose de todos os ossos que ele toca, e devolveria o pente pro
-   * ar. E precisam VOLTAR durante a recarga — sem isso o clipe tira o pente
-   * velho e nao poe nenhum no lugar, que e' pior que o pente boiando.
+   * Ossos sempre escondidos. Precisam ser escondidos DE NOVO depois de cada
+   * quadro de animacao: o clipe reescreve a pose (e as vezes a ESCALA) de todo
+   * osso que toca, e devolveria a peca pra tela.
    */
   hidden?: OssoOculto[];
+  /** Ossos que so' aparecem na recarga — ver `reloadBones` em `SPECS`. */
+  hiddenReload?: OssoOculto[];
 }
 
 /**
@@ -260,15 +266,22 @@ function prepare(
   const animator = clips.length ? new WeaponAnimator(scene, clips) : undefined;
   animator?.update(0, 0, true);
 
-  const hidden: OssoOculto[] = [];
-  if (spec.hiddenBones?.length) {
+  const colher = (nomes?: readonly string[]): OssoOculto[] => {
+    const fora: OssoOculto[] = [];
+    if (!nomes?.length) return fora;
     root.traverse((o) => {
-      if (o instanceof THREE.Bone && spec.hiddenBones!.includes(o.name)) {
-        hidden.push({ bone: o, escala: o.scale.clone() });
+      if (o instanceof THREE.Bone && nomes.includes(o.name)) {
+        fora.push({ bone: o, escala: o.scale.clone() });
       }
     });
-    esconder(hidden);
-  }
+    return fora;
+  };
+  const hidden = colher(spec.hiddenBones);
+  const hiddenReload = colher(spec.reloadBones);
+  // Some com os dois ANTES de medir: o pente avulso boiando longe da arma
+  // envenena a caixa que escala e centra o modelo.
+  esconder(hidden);
+  esconder(hiddenReload);
 
   // Escala derivada da peca de verdade, nao chutada.
   const size = new THREE.Vector3();
@@ -317,5 +330,6 @@ function prepare(
   return {
     object: root, muzzle, adsFix: new THREE.Vector3(...spec.adsOffset), animator,
     hidden: hidden.length ? hidden : undefined,
+    hiddenReload: hiddenReload.length ? hiddenReload : undefined,
   };
 }

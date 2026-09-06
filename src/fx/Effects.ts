@@ -275,7 +275,15 @@ export class Effects {
     }
 
     // --- capsulas ejetadas ---
-    const shellGeo = new THREE.CylinderGeometry(0.011, 0.012, 0.034, 6);
+    //
+    // Medida de estojo de verdade: 7.62x39 tem ~4.6 mm de raio por 39 mm de
+    // comprimento, quase 5 pra 1. A versao anterior era 11 mm por 34 mm — 1.4
+    // pra 1, quase tao larga quanto alta. Ejetada a 24 cm do olho e iluminada
+    // pelo clarao, aquilo nao lia como estojo: lia como uma pepita dourada
+    // flutuando, e foi relatado como "um elemento flutuando enquanto atiro".
+    //
+    // Os seis lados tambem entregavam: de perto, o cilindro virava uma caixa.
+    const shellGeo = new THREE.CylinderGeometry(0.0046, 0.005, 0.039, 8);
     const shellMat = new THREE.MeshStandardMaterial({
       color: 0xc9a227, metalness: 0.95, roughness: 0.3,
     });

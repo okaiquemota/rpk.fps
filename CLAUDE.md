@@ -223,6 +223,18 @@ Tres camadas, porque os clipes nao servem todos pro mesmo tipo de coisa:
 pronta pra atirar com a mao ainda encaixando o pente na tela. Cada clipe entra
 com `timeScale` ajustado pro tempo que o JOGO reservou.
 
+**A capsula do JOGO tambem entregava, e por muito tempo.** Ela era um cilindro
+de 11 mm de raio por 34 mm — 1.4 pra 1, quase tao larga quanto alta, com seis
+lados. Um estojo 7.62x39 de verdade tem ~4.6 mm por 39 mm, quase 5 pra 1.
+Ejetada a 24 cm do olho e iluminada pelo clarao, aquilo nao lia como estojo:
+lia como uma pepita dourada boiando, e foi relatado como "um elemento flutuando
+enquanto atiro" — que eu procurei no MODELO por tres rodadas antes de desligar a
+ejecao do jogo e ver o objeto sumir.
+
+A licao e' o metodo: **desligue o suspeito e veja se some**, antes de teorizar
+sobre qual osso e'. O comprimento na tela quase nao mudou (3.5% -> 3.4% da
+altura); o que mudou foi a ESPESSURA, de 2.4% pra 0.9%.
+
 **O modelo traz pecas que o jogo ja' faz — e melhor.** Alem do pente avulso, o
 AK vem com dois CARTUCHOS proprios (cilindros de 0.12 x 0.73 x 0.12,
 `Bone004_04` e `Bone005_05`) que a animacao de tiro cospe. O jogo ja' ejeta

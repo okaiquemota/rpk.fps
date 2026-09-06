@@ -433,9 +433,12 @@ export class ViewModel {
       // inclusive os que devem ficar escondidos — entao esconder vem DEPOIS
       // dela. A excecao e' a recarga: e' justamente o pente escondido que o
       // clipe encaixa na arma, entao durante ela ele precisa aparecer.
-      if (modelo.hidden) {
-        if (modelo.animator.recarregando) mostrar(modelo.hidden);
-        else esconder(modelo.hidden);
+      if (modelo.hidden) esconder(modelo.hidden);
+      if (modelo.hiddenReload) {
+        // O pente avulso e' o UNICO que reaparece, e so' na recarga. Juntar os
+        // dois grupos fazia a recarga revelar os cartuchos do modelo tambem.
+        if (modelo.animator.recarregando) mostrar(modelo.hiddenReload);
+        else esconder(modelo.hiddenReload);
       }
     }
 
