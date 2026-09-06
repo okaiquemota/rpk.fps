@@ -1,0 +1,175 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>inspetor de modelo de arma</title>
+<!--
+  Mede um .glb de arma e imprime a entrada de `SPECS` pronta pra colar em
+  src/weapons/WeaponModels.ts.
+
+  Existe por causa de um erro que NAO aparece na tela. Metade das armas do
+  pacote atual vinha com o cano pro lado errado, e ninguem percebe: em
+  perspectiva, arma apontando pra frente e pra tras parecem igualmente
+  plausiveis. Custou tres capturas achando que era enquadramento.
+
+  O `CLAUDE.md` ja' descrevia como conferir na mao — fatiar a peca ao longo do
+  comprimento e comparar a secao transversal nas duas pontas, porque a ponta
+  FINA e' o cano. Esta pagina faz essa conta, em vez de pedir que alguem faca.
+
+  Como usar: ponha o .glb em assets/models/, rode `npm run dev` e abra
+  /scratchpad/inspecionarModelo.html. Cole a linha impressa no SPECS, e depois
+  regere o icone do HUD em /scratchpad/traceIcons.html — trocar o modelo NAO
+  atualiza o icone sozinho.
+-->
+<style>
+  body { margin: 0; background: #16191f; color: #98a2b3; font: 12px ui-monospace, monospace; }
+  h2 { font-size: 12px; letter-spacing: 3px; color: #ff9d2e; margin: 18px 10px 6px; }
+  table { border-collapse: collapse; margin: 0 10px 14px; font-size: 11px; }
+  th { text-align: left; color: #6b7480; font-weight: 400; padding: 4px 14px 4px 0; }
+  td { padding: 3px 14px 3px 0; color: #d0d5dd; }
+  .ok { color: #6ee7a8; }
+  .alerta { color: #ff8b6b; }
+  pre { margin: 0; padding: 10px; white-space: pre; overflow-x: auto; color: #cbd5e1; font-size: 11px; line-height: 1.5; }
+  .nota { margin: 0 10px 16px; max-width: 70em; line-height: 1.7; color: #7c8794; }
+</style>
+<h2>MEDIDA DE CADA MODELO</h2>
+<table id="tab"><thead><tr>
+  <th>arma</th><th>caixa crua (x,y,z)</th><th>eixo longo</th>
+  <th>secao na ponta -</th><th>secao na ponta +</th><th>cano aponta pra</th><th>flipped</th>
+</tr></thead><tbody id="linhas"></tbody></table>
+<p class="nota">
+  A ponta FINA e' o cano: a secao transversal despenca no ultimo terco de uma
+  arma e nao no primeiro. Quando as duas pontas dao quase a mesma area, a peca
+  nao tem cano destacado (ou veio dentro de uma caixa maior) e a medida NAO
+  decide — nesse caso confira de lado, com a camera do viewmodel em (1.1, 0, 0)
+  olhando pra origem: ali a direita da tela e' -Z, entao o cano tem que apontar
+  pra direita.
+</p>
+<h2>ENTRADAS DE SPECS (src/weapons/WeaponModels.ts)</h2>
+<pre id="code">medindo...</pre>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+/** Arquivos procurados em assets/models/. Acrescente aqui pra medir um novo. */
+const NOMES = ['pistol', 'deagle', 'smg', 'rifle', 'shotgun', 'sniper'];
+
+/** Comprimento alvo em metros — decisao de jogo, nao medida do arquivo. */
+const ALVO = {
+  pistol: 0.26, deagle: 0.3, smg: 0.44, rifle: 0.62, shotgun: 0.66, sniper: 0.78,
+};
+
+/**
+ * Onde o centro da arma deve cair, no espaco da camera, com o jogador no
+ * quadril. Sai da calibracao MEDIDA do fuzil, o unico enquadramento aprovado
+ * ate' agora — as outras herdam o mesmo ponto de tela.
+ *
+ * Nao ha fator a aplicar aqui: o encolhimento do vetor camera->arma (0.62 no
+ * fuzil) ja' esta' embutido neste ponto. Aplicar o fator DE NOVO por cima
+ * afastaria tudo pela segunda vez.
+ */
+const CENTRO_ALVO = [0.13, -0.13, -0.1756];
+const HIP = [0.25, -0.235, -0.28];
+
+const loader = new GLTFLoader();
+const linhas = document.getElementById('linhas');
+const saida = [];
+
+/** Area da secao transversal numa fatia, pelo retangulo que a envolve. */
+function secao(pontos, eixo, de, ate) {
+  const a = (eixo + 1) % 3, b = (eixo + 2) % 3;
+  let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity, n = 0;
+  for (const p of pontos) {
+    if (p[eixo] < de || p[eixo] >= ate) continue;
+    n++;
+    if (p[a] < minA) minA = p[a];
+    if (p[a] > maxA) maxA = p[a];
+    if (p[b] < minB) minB = p[b];
+    if (p[b] > maxB) maxB = p[b];
+  }
+  return n < 3 ? 0 : (maxA - minA) * (maxB - minB);
+}
+
+for (const nome of NOMES) {
+  let gltf;
+  try {
+    gltf = await loader.loadAsync(`/assets/models/${nome}.glb`);
+  } catch {
+    continue;                               // modelo opcional que nao existe
+  }
+  const raiz = gltf.scene;
+  raiz.updateMatrixWorld(true);
+
+  // Todos os vertices no espaco do arquivo, sem rotacao nossa: a pergunta e'
+  // como a peca vem, nao como a colocamos.
+  const pontos = [];
+  raiz.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    const pos = o.geometry.getAttribute('position');
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      pontos.push([v.x, v.y, v.z]);
+    }
+  });
+  if (!pontos.length) continue;
+
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (const p of pontos) for (let i = 0; i < 3; i++) {
+    if (p[i] < min[i]) min[i] = p[i];
+    if (p[i] > max[i]) max[i] = p[i];
+  }
+  const tam = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+  const eixo = tam.indexOf(Math.max(...tam));
+  const comp = tam[eixo];
+
+  // Um terco de cada ponta, ignorando os 6% da borda: a boca do cano costuma
+  // ter um anel mais grosso, e a coronha, uma chapa fina.
+  const t = 0.06, f = 0.33;
+  const secaoMin = secao(pontos, eixo, min[eixo] + comp * t, min[eixo] + comp * f);
+  const secaoMax = secao(pontos, eixo, max[eixo] - comp * f, max[eixo] - comp * t);
+
+  const razao = secaoMin > 0 && secaoMax > 0 ? secaoMax / secaoMin : 0;
+  // Decide so' quando a diferenca e' clara. Perto de 1, a peca nao tem cano
+  // destacado e a medida nao serve.
+  const canoNoPositivo = razao < 1;
+  const confiante = razao > 0 && (razao < 0.72 || razao > 1.39);
+
+  // `prepare()` gira -90 graus quando flipped, +90 quando nao. Isso leva o lado
+  // POSITIVO do eixo longo pra -Z (frente) quando NAO ha flip.
+  const flipped = !canoNoPositivo;
+
+  // Enquadramento sugerido: o mesmo ponto de tela do fuzil calibrado. So' o Z
+  // muda por arma, porque `prepare()` recua a peca por `length * 0.28` — o que
+  // poe o PUNHO perto da origem do rig, e nao o meio da arma.
+  const alvo = ALVO[nome] ?? +comp.toFixed(2);
+  const off = [
+    +(CENTRO_ALVO[0] - HIP[0]).toFixed(3),
+    +(CENTRO_ALVO[1] - HIP[1]).toFixed(3),
+    +(CENTRO_ALVO[2] - HIP[2] + alvo * 0.28).toFixed(3),
+  ];
+
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    `<td>${nome}</td>` +
+    `<td>${tam.map((v) => v.toFixed(2)).join(', ')}</td>` +
+    `<td>${'XYZ'[eixo]} (${comp.toFixed(2)})</td>` +
+    `<td>${secaoMin.toExponential(2)}</td>` +
+    `<td>${secaoMax.toExponential(2)}</td>` +
+    `<td class="${confiante ? 'ok' : 'alerta'}">${canoNoPositivo ? '+' : '-'}${'XYZ'[eixo]}` +
+    `${confiante ? '' : '  (razao ' + razao.toFixed(2) + ' — inconclusivo)'}</td>` +
+    `<td>${flipped}</td>`;
+  linhas.appendChild(tr);
+
+  saida.push(
+    `  ${nome}: { url: ${nome}Url, length: ${alvo}, ` +
+    `offset: [${off.join(', ')}], adsOffset: [0, 0, 0], flipped: ${flipped} },` +
+    (confiante ? '' : '   // <-- CONFIRA A OLHO: medida inconclusiva'),
+  );
+}
+
+document.getElementById('code').textContent = saida.length
+  ? saida.join('\n') +
+    '\n\n// escala derivada: o modelo e reduzido pro `length` acima, medindo a peca.' +
+    '\n// `adsOffset` fica zerado: a mira e calibrada depois, olhando (ver CLAUDE.md).'
+  : 'nenhum .glb encontrado em assets/models/';
+</script>

@@ -60,11 +60,24 @@ pra todas.
 
 Errar isso NAO aparece na tela: em perspectiva, arma apontando pra frente e pra
 tras parecem igualmente plausiveis (perdi tres capturas achando que era
-enquadramento). Para descobrir num modelo novo, meca: fatie a peca ao longo do
-comprimento e compare a area da secao transversal nas duas pontas — a ponta FINA
-e' o cano. Confirme de lado, com a camera do viewmodel em (1.1, 0, 0) olhando
-pra origem; ali a direita da tela e' -Z, entao o cano tem que apontar pra
+enquadramento).
+
+**`scratchpad/inspecionarModelo.html` faz essa conta pra voce.** Ele fatia a
+peca ao longo do comprimento, compara a area da secao transversal nas duas
+pontas — a ponta FINA e' o cano — e imprime a linha de `SPECS` pronta, com
+`flipped`, `length` e `offset`. Quando as duas pontas dao area parecida a peca
+nao tem cano destacado, e a pagina diz que a medida foi INCONCLUSIVA em vez de
+chutar; ai' confira de lado, com a camera do viewmodel em (1.1, 0, 0) olhando
+pra origem — ali a direita da tela e' -Z, entao o cano tem que apontar pra
 direita.
+
+Duas conferencias que a pagina ja' passou: ela reencontra sozinha o `flipped` de
+todas as seis armas (pistola e SMG invertidas, as outras nao), e devolve pro
+fuzil exatamente o `offset` que foi calibrado a mao. E' isso que a torna
+confiavel pra um modelo que ninguem mediu ainda.
+
+Trocar um modelo tambem NAO atualiza o icone do HUD: regere em
+`scratchpad/traceIcons.html`.
 
 O enquadramento de cada arma sai de DOIS ajustes em `SPECS`, e eles servem pra
 coisas diferentes:
