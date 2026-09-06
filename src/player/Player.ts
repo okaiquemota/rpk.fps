@@ -304,7 +304,7 @@ export class Player {
 
   updateCamera(dt: number, shake: THREE.Vector3): void {
     const eye = this.position.y + this.eyeHeight;
-    this.landDip = damp(this.landDip, 0, 9, dt);
+    this.landDip = damp(this.landDip, 0, 13, dt);
 
     // Head bob acompanha a velocidade real, nao a tecla apertada.
     const speed01 = clamp(this.horizontalSpeed / PLAYER.speedSprint, 0, 1);
@@ -323,8 +323,10 @@ export class Player {
     this.camera.rotation.y = this.yaw + this.recoilYaw;
     this.camera.rotation.x = this.pitch + this.recoilPitch;
     // Leve inclinacao lateral ao andar de lado — barato e vende movimento.
+    // Discreta de proposito: a linha do horizonte tortinha e' o tipo de coisa
+    // que ninguem nota de propria conta e todo mundo sente quando e' demais.
     const strafe = this.velocity.x * -Math.sin(this.yaw + Math.PI / 2) + this.velocity.z * -Math.cos(this.yaw + Math.PI / 2);
-    this.camera.rotation.z = damp(this.camera.rotation.z, clamp(strafe * 0.004, -0.03, 0.03), 8, dt);
+    this.camera.rotation.z = damp(this.camera.rotation.z, clamp(strafe * 0.002, -0.015, 0.015), 12, dt);
 
     // FOV: mirar fecha, correr abre um pouco.
     const def = this.weapon.def;

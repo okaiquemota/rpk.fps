@@ -955,7 +955,7 @@ export class Game {
 
     for (const kind of this.pickups.update(dt, player.position)) this.onPickup(kind);
 
-    this.effects.update(dt);
+    this.effects.update(dt, player.eyePosition);
     player.updateCamera(dt, this.effects.shakeOffset);
     this.markers.update(dt, player.camera);
     this.minimap.update(player.position, player.yaw, this.enemies.enemies, this.pickups.positions);

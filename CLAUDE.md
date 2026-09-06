@@ -258,13 +258,30 @@ A licao e' o metodo: **desligue o suspeito e veja se some**, antes de teorizar
 sobre qual osso e'. O comprimento na tela quase nao mudou (3.5% -> 3.4% da
 altura); o que mudou foi a ESPESSURA, de 2.4% pra 0.9%.
 
-**Os cartuchos do modelo e a capsula do jogo dividem o trabalho.** O AK traz
-dois cartuchos proprios (`Bone004_04` e `Bone005_05`) que a animacao cospe pela
-janela de ejecao, presos ao movimento da arma. Eles ficam VISIVEIS: sao melhores
-que a capsula do jogo no momento da ejecao, porque acompanham o ferrolho. O que
-o jogo faz e a animacao nao: voar, quicar e fazer barulho no chao. Por isso os
-dois coexistem — um no receptor, o outro ja' no ar. `hiddenBones` existe pra
-quando essa divisao nao for possivel, mas hoje esta' vazio.
+**Os cartuchos do modelo e a capsula do jogo dividem o trabalho, e a divisao e'
+por DISTANCIA.** O AK traz dois cartuchos proprios (`Bone004_04` e
+`Bone005_05`) que a animacao cospe pela janela de ejecao, presos ao movimento da
+arma. Eles ficam VISIVEIS: no instante da ejecao sao melhores que a capsula do
+jogo, porque acompanham o ferrolho. O que o jogo faz e a animacao nao e' o
+resto: voar, quicar e fazer barulho no chao.
+
+Deixar os dois nascerem juntos nao funciona. A capsula do jogo saia a 43 cm do
+olho, do mesmo lado, no mesmo quadro — duas peças douradas lado a lado, cada
+uma com ~5% da altura da tela. Foi relatado como "as capsulas estao repetidas",
+e e' literalmente isso.
+
+Hoje a nossa sai no mesmo quadro do tiro, com a mesma fisica, mas so' entra em
+cena depois de `LIBERA` (0.75 m do olho, `Effects.ts`) — medido, 11 quadros,
+com ela ja' em 2.8% da altura da tela em vez de 4.8%. A conta e' por DISTANCIA
+e nao por tempo, porque e' a distancia que decide se ela vai aparecer gigante
+na cara do jogador. E e' um TRINCO, de uma vez so': testando a distancia todo
+quadro, uma capsula parada no chao piscaria quando o jogador passasse por cima.
+
+O cartucho do modelo, medido, se mexe por ~3 quadros e some (o clipe de tiro e'
+aditivo e nao prende a pose). Entao um cobre o instante da ejecao, o outro cobre
+o voo — e numa automatica a 720 tiros por minuto sai um cartucho novo na janela
+a cada 5 quadros, sem buraco. `hiddenBones` existe pra quando essa divisao nao
+for possivel, mas hoje esta' vazio.
 
 **O clarao do cano era um retangulo, nao um clarao.** Um plano de COR CHAPADA de
 0.3 m, a 37 cm do olho, com escala aleatoria de ate' 1.5: chegava a 72% da
@@ -287,15 +304,38 @@ entrando. `esconder`/`mostrar` sao chamados por quadro conforme
 `animator.recarregando`, sempre DEPOIS do avanco da animacao — o clipe reescreve
 a pose de todo osso que toca.
 
-**E o FIM da recarga nao pode ter crossfade.** No quadro em que o clipe acaba, o
-pente sobressalente — que a animacao acabou de encaixar — e' escondido, enquanto
-a base leva o tempo do fade trazendo o pente ORIGINAL de volta pro lugar. No meio
-disso nao ha' pente nenhum: ele some e volta. Encurtar o fade so' encurta o
-buraco (0.05 s de fade = 5 quadros medidos sem pente), e manter o sobressalente
-visivel durante o fade tambem nao serve, porque ele sai voando junto. `FADE_VOLTA`
-e' 0 por isso. O salto de pose que isso poderia causar nao existe: medido em
-0.00014 contra 0.005 de movimento normal por quadro — o clipe de recarga termina
-praticamente na pose de repouso.
+**O piscar do pente no fim da recarga NAO era o crossfade.** Zerar o fade de
+volta encurtou o buraco e nao o fechou, e a razao e' que o problema nunca foi de
+tempo. Ler as trilhas do arquivo (`.glb` e' JSON + binario; da' pra abrir em
+Node sem three) responde em um minuto o que tres rodadas de teorizar nao
+responderam:
+
+- o pente que estava na arma (`Bone.001_02`) e' ATIRADO pra longe (8.8 unidades
+  em Z, ~1 m na escala do jogo) no meio do clipe, e fica la' ate' o fim;
+- quem termina encaixado na arma e' o SOBRESSALENTE (`Bone.002_01`), que chega
+  exatamente na posicao de repouso do primeiro.
+
+Ou seja: no ultimo quadro do clipe, o pente que se ve' na tela e' justamente o
+que o `ViewModel` esconde assim que `recarregando` vira falso. E quem devolve o
+original pro lugar nao e' a animacao de base — a `idle` nao tem trilha de
+POSICAO pra esse osso — e sim o proprio three, que restaura o valor do bind pose
+quando nenhuma acao com peso reivindica a propriedade.
+
+So' que isso acontecia um quadro DEPOIS. O evento `finished` e' disparado no
+meio do `_update` da acao, ANTES de ela acumular a pose daquele quadro: o clipe
+ainda entrava com peso 1, com o sobressalente ja' escondido e o original ainda
+a um metro dali. Um quadro com a arma sem pente nenhum.
+
+A correcao e' uma linha — `acao.enabled = false` dentro do `finished`, que faz a
+restauracao cair no MESMO quadro. Medido: 1 quadro sem pente antes, 0 depois. O
+salto de pose que isso poderia causar e' ZERO na medida (o clipe termina no bind
+pose).
+
+**A licao e' de metodo, e e' a mesma da capsula.** O primeiro diagnostico media o
+osso ERRADO — o sobressalente — e concluia "0 quadros sem pente" enquanto o
+jogador via o piscar. Metrica que confirma a hipotese nao vale nada se a
+hipotese escolheu o que medir. Quando o relato e a medida discordam, quem esta'
+errado e' a medida.
 
 Medido (`scratchpad/` + `g.update(1/60)` num laco, amplitude de um osso):
 
@@ -634,6 +674,42 @@ ele mexe nos dois eixos de uma vez.
 passo fixo e desenha o rastro de cada arma em graus. Testar recuo dentro do jogo
 sob renderizacao por software mede o framerate, nao a arma: a ~1.5 fps o fuzil
 dispara 1.5 tiros por segundo em vez de 12, e o patamar cai junto.
+
+## Balanco, arrasto e tremor (tudo cosmetico)
+
+Nada disso e' fisica. Velocidade, aceleracao, atrito e pulo do jogador ficam em
+`PLAYER` (`config.ts`) e **nao foram tocados**; o que os numeros abaixo mexem e'
+so' o quanto a IMAGEM oscila. Sao coisas diferentes e vale nao confundi-las: dava
+pra deixar o jogo "mais duro" mexendo em `accelGround`, e isso mudaria o jogo,
+nao a apresentacao.
+
+Onde mora cada um:
+
+- **arma** (`ViewModel.ts`): `BOB_X`/`BOB_Y` (passo), `SWAY_*` (arrasto ao girar
+  o mouse), `KICK_*` (pulo do disparo);
+- **camera** (`CAMERA` em `config.ts`): `bobAmount`, `landingDip`, mais a
+  inclinacao lateral no `Player.updateCamera`;
+- **tremor de tela** (`FX.screenShakeDecay` e a amplitude em `Effects.update`).
+
+**Amplitude e rigidez sao alavancas diferentes, e as duas contam.** Baixando so'
+a amplitude, o movimento fica menor e igualmente molenga — a arma continua
+levando o mesmo tempo pra reencontrar o centro. Por isso os `damp` andaram junto
+com os valores: arrasto 9 -> 14, recuo 14/12/9 -> 19/17/13.
+
+Medido (`vm.update()` num laco de 240 quadros, amplitude de ponta a ponta da
+posicao do rig na tela):
+
+| | antes | depois |
+|---|---|---|
+| andando, lateral | 0.99 cm | 0.50 cm |
+| andando, vertical | 0.37 cm | 0.18 cm |
+| girando o mouse, lateral | 3.18 cm | 1.71 cm |
+| girando o mouse, vertical | 1.82 cm | 0.95 cm |
+| rajada, recuo em Z | 1.90 cm | 1.19 cm |
+
+Cuidado com o `giroMax` nessa medicao: ele nao parte de zero. `MODEL_HIP_YAW`
+poe a arma a 4.01 graus em repouso, entao os 5.47 -> 4.50 da coluna de girar o
+mouse sao 1.46 -> 0.49 grau de arrasto, e nao uma queda de 18%.
 
 ## Desempenho
 

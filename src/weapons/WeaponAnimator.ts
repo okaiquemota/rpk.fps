@@ -31,26 +31,7 @@ export type ClipeUnico = 'draw' | 'reload';
 const ANDANDO = 0.12;
 const CORRENDO = 0.72;
 /** Tempo de crossfade entre poses de base. */
-const FADE = 0.22;
-/**
- * Crossfade de VOLTA, quando sacar ou recarregar termina. Curto de proposito.
- *
- * Com os 0.22 s do fade normal aparecia um piscar do pente: no quadro em que o
- * clipe acaba, o pente sobressalente — que a animacao acabou de encaixar — e'
- * escondido, enquanto a base ainda leva 0.22 s trazendo o pente ORIGINAL de
- * volta pro lugar. No meio disso nao ha' pente nenhum, e o que se ve' e' ele
- * sumindo e voltando.
- *
- * Encurtar o fade nao resolve, so' encurta o buraco (medido: 0.05 s de fade =
- * 5 quadros sem pente). Manter o sobressalente visivel durante o fade tambem
- * nao, porque ele sai voando junto. O que fecha e' nao ter fade: no quadro
- * seguinte a base ja' manda sozinha, o pente original esta' no lugar e o
- * sobressalente sai de cena no mesmo instante.
- *
- * O salto de pose que isso poderia causar nao acontece porque o clipe de
- * recarga termina praticamente na pose de repouso — medido abaixo.
- */
-const FADE_VOLTA = 0;
+const FADE = 0.15;
 
 export class WeaponAnimator {
   private mixer: THREE.AnimationMixer;
@@ -113,10 +94,33 @@ export class WeaponAnimator {
     this.mixer.addEventListener('finished', (e) => {
       const acao = (e as unknown as { action: THREE.AnimationAction }).action;
       if (acao !== this.unico) return;
-      // Terminou de sacar ou recarregar: a base volta de onde parou.
       this.unico = null;
+
+      // `enabled = false` NESTE ponto, e nao um crossfade de volta, e' o que
+      // fecha o piscar do pente. E o motivo nao e' o tempo do fade — era so'
+      // isso que eu achava, e por isso encurta-lo nunca resolveu.
+      //
+      // O que a recarga faz de verdade, medido nas trilhas do arquivo: o pente
+      // que estava na arma (`Bone.001_02`) e' ATIRADO pra longe (8.8 unidades)
+      // e fica la' ate' o fim do clipe; quem termina encaixado na arma e' o
+      // SOBRESSALENTE (`Bone.002_01`), que chega na posicao de repouso do
+      // primeiro. Ou seja: no ultimo quadro do clipe, o pente da tela e' o que
+      // o ViewModel esconde assim que `recarregando` vira falso.
+      //
+      // Quem devolve o original pro lugar nao e' a base — a `idle` nem tem
+      // trilha de POSICAO pra esse osso — e sim o proprio three: quando nenhuma
+      // acao com peso reivindica uma propriedade, o mixer restaura o valor do
+      // bind pose, que ali e' o pente na arma. So' que isso acontecia um quadro
+      // DEPOIS, porque o evento `finished` e' disparado no meio do `_update` da
+      // acao, ANTES de ela acumular a pose daquele quadro. Um quadro com o
+      // sobressalente ja' escondido e o original ainda longe = arma sem pente.
+      //
+      // Zerando o peso aqui, a restauracao cai no MESMO quadro. O pulo de pose
+      // que isso poderia causar nao existe: o clipe termina praticamente no
+      // bind pose (medido — ver CLAUDE.md).
+      acao.enabled = false;
       if (this.base) {
-        acao.crossFadeTo(this.base.reset().play(), FADE_VOLTA, false);
+        this.base.reset().play();
         this.base.setEffectiveWeight(1);
       }
     });

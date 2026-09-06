@@ -182,6 +182,11 @@ interface Shell {
   spin: THREE.Vector3;
   bounces: number;
   mesh: THREE.Mesh;
+  /**
+   * A capsula existe e ja' voa, mas ainda nao aparece: e' o instante da ejecao,
+   * que pertence a` animacao da arma (ver `LIBERA`).
+   */
+  escondida: boolean;
 }
 
 interface FlashLight {
@@ -193,6 +198,21 @@ interface FlashLight {
 
 const MAX_TRACERS = 32;
 const MAX_SHELLS = 28;
+/**
+ * A que distancia do olho a capsula do jogo comeca a aparecer, em metros.
+ *
+ * Modelo com animacao de tiro cospe o PROPRIO cartucho pela janela de ejecao,
+ * preso ao movimento da arma — e ele e' melhor que o nosso naquele instante,
+ * porque acompanha o ferrolho. Nascendo junto, os dois apareciam lado a lado a
+ * 40 cm do olho, e o que se via era municao em dobro.
+ *
+ * O que a animacao NAO faz e' o resto: voar, quicar e fazer barulho no chao.
+ * Entao a nossa continua saindo no mesmo quadro do tiro, com a mesma fisica —
+ * so' fica invisivel enquanto esta' na regiao da arma. A conta e' por
+ * DISTANCIA, e nao por tempo, porque e' a distancia que decide se ela vai
+ * aparecer gigante na cara do jogador ou pequena, ja' caindo.
+ */
+const LIBERA = 0.75;
 const MAX_FLASHES = 4;
 const TRACER_LENGTH = 4.5;
 
@@ -294,7 +314,8 @@ export class Effects {
       mesh.castShadow = true;
       this.group.add(mesh);
       this.shells.push({
-        life: 0, velocity: new THREE.Vector3(), spin: new THREE.Vector3(), bounces: 0, mesh,
+        life: 0, velocity: new THREE.Vector3(), spin: new THREE.Vector3(),
+        bounces: 0, mesh, escondida: false,
       });
     }
 
@@ -393,7 +414,10 @@ export class Effects {
     s.spin.set(randRange(-18, 18), randRange(-18, 18), randRange(-18, 18));
     s.life = 3.2;
     s.bounces = 0;
-    s.mesh.visible = true;
+    // Nasce invisivel: quem mostra a ejecao e' a animacao da arma. Ela aparece
+    // sozinha no `update`, ao se afastar do olho (ver `LIBERA`).
+    s.escondida = true;
+    s.mesh.visible = false;
   }
 
   // ------------------------------------------------------------------
@@ -512,7 +536,8 @@ export class Effects {
 
   // ------------------------------------------------------------------
 
-  update(dt: number): void {
+  /** `olho` posiciona a camera: e' o que decide quando a capsula aparece. */
+  update(dt: number, olho?: THREE.Vector3): void {
     this.sparks.update(dt);
     this.smoke.update(dt);
 
@@ -549,6 +574,14 @@ export class Effects {
       s.mesh.rotation.x += s.spin.x * dt;
       s.mesh.rotation.y += s.spin.y * dt;
       s.mesh.rotation.z += s.spin.z * dt;
+
+      // Saiu da regiao da arma: entra em cena e nao sai mais. O trinco importa
+      // — sem ele, uma capsula parada no chao piscaria toda vez que o jogador
+      // passasse por cima dela.
+      if (s.escondida) {
+        const longe = !olho || s.mesh.position.distanceToSquared(olho) > LIBERA * LIBERA;
+        if (longe) { s.escondida = false; s.mesh.visible = true; }
+      }
 
       const p = s.mesh.position;
       const floor = this.groundHeightAt(p.x, p.z, p.y + 0.5) + 0.014;
@@ -588,13 +621,17 @@ export class Effects {
     }
 
     // --- screen shake (trauma^2 e' mais natural que linear) ---
+    //
+    // Amplitude de 0.16 pra 0.1: numa rajada o trauma se empilha, e o que era
+    // pra ser um soco por tiro virava a tela inteira tremendo enquanto se
+    // atira — justo quando se precisa ver onde a bala foi.
     this.shakeTrauma = Math.max(0, this.shakeTrauma - FX.screenShakeDecay * dt * 0.14);
     const s = this.shakeTrauma * this.shakeTrauma;
     const now = performance.now() / 1000;
     this.shakeOffset.set(
-      Math.sin(now * 47) * s * 0.16,
-      Math.sin(now * 61 + 1.7) * s * 0.16,
-      Math.sin(now * 53 + 3.1) * s * 0.07,
+      Math.sin(now * 47) * s * 0.1,
+      Math.sin(now * 61 + 1.7) * s * 0.1,
+      Math.sin(now * 53 + 3.1) * s * 0.045,
     );
   }
 
@@ -605,7 +642,7 @@ export class Effects {
       this.tracers[k]!.life = 0;
       this.tracerMeshes[k]!.visible = false;
     }
-    for (const s of this.shells) { s.life = 0; s.mesh.visible = false; }
+    for (const s of this.shells) { s.life = 0; s.escondida = false; s.mesh.visible = false; }
     for (const f of this.flashes) { f.life = 0; f.light.intensity = 0; }
     for (const d of this.decals) d.visible = false;
     this.shakeTrauma = 0;

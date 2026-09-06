@@ -43,8 +43,16 @@ export const CAMERA = {
   adsTime: 0.14,
   pitchLimit: Math.PI / 2 - 0.02,
   bobFrequency: 10,
-  bobAmount: 0.045,
-  landingDip: 0.16,
+  /**
+   * Amplitude do balanco da CAMERA ao andar, em metros.
+   *
+   * Caiu de 0.045 pra 0.02 junto com o balanco da arma. O olho oscilando e' o
+   * que mais atrapalha mirar em movimento: a arma sacode um pouco, mas a
+   * camera sacode o ALVO junto. Sobra o suficiente pra sentir o passo.
+   */
+  bobAmount: 0.02,
+  /** Quanto o olho afunda ao aterrissar. Era 0.16 — um mergulho. */
+  landingDip: 0.09,
 } as const;
 
 export const WORLD = {
@@ -93,7 +101,8 @@ export const FX = {
   maxParticles: 700,
   maxSmoke: 260,
   tracerSpeed: 260,
-  screenShakeDecay: 7,
+  /** Quanto mais alto, mais rapido o tremor da tela assenta. Era 7. */
+  screenShakeDecay: 9.5,
 } as const;
 
 /**
