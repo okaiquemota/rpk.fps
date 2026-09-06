@@ -117,9 +117,11 @@ tem o arquivo. E' a diferenca em relacao aos `.glb`, que precisam existir.
 
 O nome do arquivo e' o id da arma (`rifle.ogg`), com sufixo pra tomadas extras
 (`rifle-2.ogg`). As regras de formato, tamanho e licenca estao em
-`assets/sounds/README.md` — a curta: opus ou mp3, nunca wav, e menos de 600 KB
-por arquivo senao o Vite para de embutir e o build de arquivo unico perde o som
-sem avisar.
+`assets/sounds/README.md` — a curta: **wav serve** (todo navegador decodifica), e
+a escolha de formato e' de tamanho, nao de suporte. Seis wav curtos e mono custam
+uns 350 KB num bundle de 1.4 MB. O que pesa e' wav longo ou estereo. Limite duro:
+600 KB por arquivo, senao o Vite para de embutir e o build de arquivo unico perde
+o som sem avisar.
 
 Duas decisoes que nao sao obvias:
 

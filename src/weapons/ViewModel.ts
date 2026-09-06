@@ -9,7 +9,12 @@ interface Rig {
   flash: THREE.Mesh;
 }
 
-const HIP_POS = new THREE.Vector3(0.2, -0.16, -0.33);
+/**
+ * Onde a arma fica no quadril. Mais baixa e um pouco mais afastada do que ja'
+ * esteve: subindo demais, o cano cruza a tela na diagonal e encosta na mira —
+ * a referencia (CrossFire) mantem a arma no canto de baixo, quase deitada.
+ */
+const HIP_POS = new THREE.Vector3(0.25, -0.235, -0.42);
 const ADS_POS = new THREE.Vector3(0, -0.1, -0.3);
 /** Angulo de 3/4 no quadril; some ao mirar, quando a arma alinha com a mira. */
 const HIP_YAW = -0.16;
@@ -21,6 +26,23 @@ const HIP_PITCH = 0.05;
  */
 const MODEL_HIP_YAW = -0.07;
 const MODEL_HIP_PITCH = 0.015;
+
+/**
+ * Quanto a arma se mexe sozinha.
+ *
+ * Balanco e arrasto dao vida, mas em excesso viram enjoo e atrapalham mirar:
+ * a arma nunca esta' onde estava um instante atras. Estes valores sao metade
+ * dos originais — o movimento continua legivel, so' parou de dancar.
+ *
+ * Todos juntos aqui de proposito: espalhados pelo `update`, mexer no "quanto a
+ * arma balanca" virava caca a seis numeros em quatro linhas diferentes.
+ */
+const BOB_X = 0.008;        // vaivem lateral do passo
+const BOB_Y = 0.006;        // sobe-desce do passo
+const SWAY_GAIN = 0.0007;   // quanto a arma fica pra tras ao girar o mouse
+const SWAY_LIMIT = 0.028;   // teto do arrasto, em metros
+const SWAY_TILT = 1.6;      // giro que o arrasto lateral provoca
+const SWAY_ROLL = 1.2;      // inclinacao que o arrasto vertical provoca
 
 /**
  * A arma que voce ve' na tela. Fica pendurada na camera, entao vive em espaco
@@ -324,17 +346,17 @@ export class ViewModel {
     }
     const bobStrength = opts.moveSpeed01 * (1 - opts.adsAmount * 0.85) * (opts.grounded ? 1 : 0.25);
     this.bobOffset.set(
-      Math.sin(this.bobPhase) * 0.018 * bobStrength,
-      Math.abs(Math.cos(this.bobPhase)) * -0.014 * bobStrength,
+      Math.sin(this.bobPhase) * BOB_X * bobStrength,
+      Math.abs(Math.cos(this.bobPhase)) * -BOB_Y * bobStrength,
       0,
     );
 
     // sway: a arma "fica pra tras" quando voce vira o mouse
     const swayScale = 1 - opts.adsAmount * 0.7;
-    this.swayX = damp(this.swayX, -opts.lookDX * 0.0016 * swayScale, 9, dt);
-    this.swayY = damp(this.swayY, opts.lookDY * 0.0016 * swayScale, 9, dt);
-    this.swayX = THREE.MathUtils.clamp(this.swayX, -0.05, 0.05);
-    this.swayY = THREE.MathUtils.clamp(this.swayY, -0.05, 0.05);
+    this.swayX = damp(this.swayX, -opts.lookDX * SWAY_GAIN * swayScale, 9, dt);
+    this.swayY = damp(this.swayY, opts.lookDY * SWAY_GAIN * swayScale, 9, dt);
+    this.swayX = THREE.MathUtils.clamp(this.swayX, -SWAY_LIMIT, SWAY_LIMIT);
+    this.swayY = THREE.MathUtils.clamp(this.swayY, -SWAY_LIMIT, SWAY_LIMIT);
 
     // recarga: a arma desce e gira pra fora
     this.reloadAmount = opts.reloading
@@ -356,8 +378,8 @@ export class ViewModel {
     const hipYaw = usaModelo ? MODEL_HIP_YAW : HIP_YAW;
     rig.root.rotation.set(
       hipPitch * hip + this.recoilRot * 0.35 + this.reloadAmount * 0.75 + this.switchAmount * 0.4,
-      hipYaw * hip - this.swayX * 3 + this.reloadAmount * 0.3,
-      this.swayY * 2.2 - this.reloadAmount * 0.35 + this.recoilRoll,
+      hipYaw * hip - this.swayX * SWAY_TILT + this.reloadAmount * 0.3,
+      this.swayY * SWAY_ROLL - this.reloadAmount * 0.35 + this.recoilRoll,
     );
 
     // clarao do cano

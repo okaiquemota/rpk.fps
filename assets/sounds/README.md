@@ -27,22 +27,31 @@ tom em ±4%, o que ajuda mas nao substitui ter gravacoes diferentes.
 
 ## Formato e tamanho
 
-**Use `.ogg` (Opus) ou `.mp3`. Nao ponha `.wav` aqui.** Os arquivos entram
-embutidos no bundle como data URI, e base64 ainda soma 33% em cima:
+**`.wav` funciona** — e' inclusive o formato que todo navegador decodifica sem
+discussao. Ogg/Opus e mp3 tambem. A escolha e' de TAMANHO, nao de suporte: os
+arquivos entram embutidos no bundle como data URI, e base64 soma 33% em cima.
 
-| formato          | 1 s de audio | seis armas, 3 tomadas |
-|------------------|--------------|-----------------------|
-| wav 48k 16 bit   | ~96 KB       | ~1.7 MB → 2.3 MB embutido |
-| mp3 96 kbps      | ~12 KB       | ~216 KB → 288 KB          |
-| ogg/opus 64 kbps | ~8 KB        | ~144 KB → 192 KB          |
+Por segundo de audio, mono:
 
-O bundle inteiro hoje tem 1.4 MB, entao opus ou mp3 custam pouco e wav quase
-dobra o download.
+| formato          | 1 s      | seis armas, 1 tomada | seis armas, 3 tomadas |
+|------------------|----------|----------------------|-----------------------|
+| wav 44.1k 16 bit | ~88 KB   | ~530 KB → 700 KB     | ~1.6 MB → 2.1 MB      |
+| mp3 96 kbps      | ~12 KB   | ~72 KB → 96 KB       | ~216 KB → 288 KB      |
+| ogg/opus 64 kbps | ~8 KB    | ~48 KB → 64 KB       | ~144 KB → 192 KB      |
+
+O bundle inteiro tem ~1.4 MB hoje. Um tiro dura meio segundo: **seis wav curtos
+custam uns 350 KB, o que e' perfeitamente aceitavel.** O que pesa e' wav LONGO
+(cauda de reverb gravada junto) ou ESTEREO — que dobra tudo, e nem serve, porque
+o jogo espacializa o som sozinho.
+
+Entao: use wav se e' o que voce tem. Corte curto, deixe mono, e so' converta pra
+ogg/mp3 se for por muitas tomadas por arma.
 
 **Limite duro: 600 KB por arquivo.** Acima disso o Vite para de embutir
 (`assetsInlineLimit` no `vite.config.ts`) e o arquivo vira um asset separado —
-o build de arquivo unico deixa de conter o som, silenciosamente. Tiro nao chega
-perto desse tamanho se estiver comprimido; e' so' nao trazer wav.
+o build de arquivo unico deixa de conter o som, silenciosamente. Em wav mono
+44.1k isso da' quase 7 segundos, entao tiro nao chega perto; um som de recarga
+comprido, talvez.
 
 Corte o silencio do comeco: o som toca no instante do disparo, e 80 ms de nada
 no inicio da gravacao viram 80 ms de atraso percebido no gatilho.
