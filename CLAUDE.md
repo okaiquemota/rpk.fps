@@ -198,6 +198,49 @@ primeiro (so' ele sabe que formatos de textura comprimida a GPU aceita, e o
 (pro aquecimento de shaders cobrir os materiais deles), e o `Game` recebe os
 dois prontos.
 
+### Animacao vinda do .glb
+
+`src/weapons/WeaponAnimator.ts` toca os clipes que vem dentro do modelo. O AK
+traz nove; as outras cinco armas nao tem nenhum e seguem no movimento
+procedural. **As duas coisas coexistem, e e' preciso desligar uma quando a outra
+existe** — a recarga procedural (a arma inteira descendo e girando pra fora)
+somada ao clipe daria a arma mergulhando enquanto a mao troca o pente. Quem
+decide e' `animator.has('reload')`.
+
+Tres camadas, porque os clipes nao servem todos pro mesmo tipo de coisa:
+
+- **base em laco** — idle, andar, correr. Poses de corpo inteiro que se excluem,
+  trocadas por crossfade conforme `moveSpeed01`;
+- **disparo unico que assume a base** — sacar e recarregar. A base sai de cena e
+  volta no evento `finished` do mixer;
+- **ADITIVO** — atirar. Este nao pode substituir a base: o ferrolho precisa
+  cyclar enquanto a arma continua no idle ou no passo. `makeClipAdditive` faz o
+  clipe descrever a DIFERENCA em relacao ao idle; substituindo, cada tiro
+  cortaria a animacao de baixo por um quarto de segundo.
+
+**A duracao nunca e' a do arquivo.** O clipe de recarga tem 2.67 s e o
+`reloadTime` do fuzil e' 1.75 — tocado na velocidade do arquivo, a arma estaria
+pronta pra atirar com a mao ainda encaixando o pente na tela. Cada clipe entra
+com `timeScale` ajustado pro tempo que o JOGO reservou.
+
+**O pente escondido precisa VOLTAR na recarga.** E' justamente ele que o clipe
+encaixa na arma; deixado oculto, a recarga mostra o pente velho saindo e nenhum
+entrando. `esconder`/`mostrar` sao chamados por quadro conforme
+`animator.recarregando`, sempre DEPOIS do avanco da animacao — o clipe reescreve
+a pose de todo osso que toca.
+
+Medido (`scratchpad/` + `g.update(1/60)` num laco, amplitude de um osso):
+
+| | movimento |
+|---|---|
+| idle (4.2 s) | 0.0095 |
+| recarga | 0.0774 |
+| tiro (0.25 s) | 0.1338 |
+| correndo (1.6 s) | 0.1029 |
+
+E o pente avulso apareceu em 100/100 quadros da recarga, voltando a escala zero
+depois. Movimento nao da' pra conferir em captura estatica — meca.
+
 ## Icones das armas no HUD
 
 As silhuetas de `src/ui/weaponIcons.ts` sao TRACADAS dos proprios `.glb`, nao

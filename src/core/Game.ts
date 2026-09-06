@@ -736,7 +736,7 @@ export class Game {
     // --- recarregar ---
     if (this.input.wasPressed('KeyR') && weapon.startReload()) {
       this.audio.reload('out');
-      this.viewModel.onReloadStart();
+      this.viewModel.onReloadStart(weapon.def.reloadTime);
     }
 
     // --- mirar ---
@@ -755,7 +755,7 @@ export class Game {
         this.audio.dryFire();
         if (weapon.startReload()) {
           this.audio.reload('out');
-          this.viewModel.onReloadStart();
+          this.viewModel.onReloadStart(weapon.def.reloadTime);
         }
       }
     }
@@ -810,7 +810,7 @@ export class Game {
 
     this.audio.shot(SHOT_SOUND[weapon.def.id], undefined, weapon.def.id);
     if (report.surfaceHits > 0) this.audio.impact();
-    this.viewModel.onFire(weapon.def.kickback);
+    this.viewModel.onFire(weapon.def.kickback, 60 / weapon.def.rpm);
     // Mirar segura a arma: o mesmo padrao, com menos amplitude.
     const kick = weapon.recoilStep();
     const adsDamp = 1 - player.adsAmount * 0.35;

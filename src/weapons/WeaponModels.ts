@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { gltfLoader } from '../core/gltf';
 import type { WeaponId } from './WeaponDefs';
+import { WeaponAnimator } from './WeaponAnimator';
 
 import pistolUrl from '../../assets/models/pistol.glb?url';
 import deagleUrl from '../../assets/models/deagle.glb?url';
@@ -107,17 +108,20 @@ export interface WeaponModel {
   /** Correcao de posicao ao mirar — ver `adsOffset` em `SPECS`. */
   adsFix: THREE.Vector3;
   /**
-   * Existe so' quando o modelo traz animacao. Quem tem esqueleto precisa de
-   * `mixer.update(dt)` a cada quadro, senao fica congelado na pose de repouso —
-   * que, como se descobriu, nem sempre e' uma pose apresentavel.
+   * Existe so' quando o modelo traz animacao. Precisa de `update(dt, ...)` a
+   * cada quadro, senao a arma congela na pose de repouso — que, como se
+   * descobriu, nem sempre e' uma pose apresentavel.
    */
-  mixer?: THREE.AnimationMixer;
+  animator?: WeaponAnimator;
   /**
-   * Ossos zerados por `hiddenBones`. Precisam ser zerados DE NOVO depois de
-   * cada `mixer.update()`: a animacao reescreve a pose de todos os ossos que
-   * ela toca, e devolveria o pente pro ar.
+   * Ossos de `hiddenBones`, com a escala original guardada.
+   *
+   * Precisam ser escondidos DE NOVO depois de cada quadro de animacao: o clipe
+   * reescreve a pose de todos os ossos que ele toca, e devolveria o pente pro
+   * ar. E precisam VOLTAR durante a recarga — sem isso o clipe tira o pente
+   * velho e nao poe nenhum no lugar, que e' pior que o pente boiando.
    */
-  hidden?: THREE.Bone[];
+  hidden?: OssoOculto[];
 }
 
 /**
@@ -146,16 +150,30 @@ export async function loadWeaponModels(): Promise<Map<WeaponId, WeaponModel>> {
   return out;
 }
 
+/** Um osso que fica escondido, e a escala que ele tem quando aparece. */
+export interface OssoOculto {
+  bone: THREE.Bone;
+  escala: THREE.Vector3;
+}
+
 /**
  * Colapsa a geometria de um osso: escala zero deixa os triangulos degenerados
  * (area zero, nao rasterizam), e a posicao zerada traz o ponto que sobra pra
  * junto do pai, pra ele nao continuar puxando a caixa do modelo pra longe.
  */
-export function esconder(bones: readonly THREE.Bone[]): void {
-  for (const b of bones) {
-    b.scale.setScalar(0);
-    b.position.set(0, 0, 0);
+export function esconder(ossos: readonly OssoOculto[]): void {
+  for (const o of ossos) {
+    o.bone.scale.setScalar(0);
+    o.bone.position.set(0, 0, 0);
   }
+}
+
+/**
+ * Devolve a escala original. So' a ESCALA: posicao e giro ficam por conta do
+ * clipe que esta' tocando, que e' quem sabe levar o pente ate' a arma.
+ */
+export function mostrar(ossos: readonly OssoOculto[]): void {
+  for (const o of ossos) o.bone.scale.copy(o.escala);
 }
 
 /**
@@ -207,17 +225,15 @@ function prepare(
   //
   // Quem tem a pose certa e' a animacao `idle`. Aplicando ela antes de medir, o
   // pente vai pro lugar dele e a caixa passa a ser a caixa da arma.
-  const mixer = clips.length ? new THREE.AnimationMixer(scene) : undefined;
-  const idle = clips.find((c) => /idle$/i.test(c.name)) ?? clips[0];
-  if (mixer && idle) {
-    mixer.clipAction(idle).play();
-    mixer.update(0);
-  }
+  const animator = clips.length ? new WeaponAnimator(scene, clips) : undefined;
+  animator?.update(0, 0, true);
 
-  const hidden: THREE.Bone[] = [];
+  const hidden: OssoOculto[] = [];
   if (spec.hiddenBones?.length) {
     root.traverse((o) => {
-      if (o instanceof THREE.Bone && spec.hiddenBones!.includes(o.name)) hidden.push(o);
+      if (o instanceof THREE.Bone && spec.hiddenBones!.includes(o.name)) {
+        hidden.push({ bone: o, escala: o.scale.clone() });
+      }
     });
     esconder(hidden);
   }
@@ -261,7 +277,7 @@ function prepare(
   const muzzle = new THREE.Vector3(0, (finalBox.min.y + finalBox.max.y) / 2, finalBox.min.z);
 
   return {
-    object: root, muzzle, adsFix: new THREE.Vector3(...spec.adsOffset), mixer,
+    object: root, muzzle, adsFix: new THREE.Vector3(...spec.adsOffset), animator,
     hidden: hidden.length ? hidden : undefined,
   };
 }

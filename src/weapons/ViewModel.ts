@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clamp, damp, lerp } from '../core/math';
 import { WEAPON_DEFS, WEAPON_ORDER, type WeaponId } from './WeaponDefs';
-import { esconder, type WeaponModel } from './WeaponModels';
+import { esconder, mostrar, type WeaponModel } from './WeaponModels';
 
 interface Rig {
   root: THREE.Group;
@@ -65,6 +65,9 @@ const KICK_BACK_MAX = 0.08;   // teto do recuo, em metros
 const KICK_ROT = 1.1;         // giro por unidade de kickback
 const KICK_ROT_MAX = 0.22;    // teto do giro, em radianos
 const KICK_ROT_APPLIED = 0.35;// quanto do giro vira inclinacao na tela
+/** Quanto dura sacar a arma, em segundos. O clipe e' ajustado pra caber. */
+const DRAW_TIME = 0.5;
+
 const KICK_ROLL = 4;          // rolagem por radiano do padrao lateral
 const KICK_ROLL_MAX = 0.12;   // teto da rolagem
 
@@ -324,7 +327,11 @@ export class ViewModel {
     if (id === this.current) return;
     for (const [key, rig] of this.rigs) rig.root.visible = key === id;
     this.current = id;
-    this.switchAmount = 1;
+    const animator = this.models.get(id)?.animator;
+    animator?.draw(DRAW_TIME);
+    // Quem tem clipe de sacar nao precisa do movimento procedural por cima: o
+    // clipe ja' traz a arma pra posicao.
+    this.switchAmount = animator?.has('draw') ? 0 : 1;
   }
 
   get muzzleWorldPosition(): THREE.Vector3 {
@@ -332,10 +339,14 @@ export class ViewModel {
     return rig.muzzlePoint.getWorldPosition(new THREE.Vector3());
   }
 
-  onFire(kickback: number): void {
+  onFire(kickback: number, intervalo: number): void {
     this.recoilOffset = Math.min(this.recoilOffset + kickback * KICK_BACK, KICK_BACK_MAX);
     this.recoilRot = Math.min(this.recoilRot + kickback * KICK_ROT, KICK_ROT_MAX);
     this.flashTimer = 0.055;
+    // O clipe de tiro e' aditivo: soma o ferrolho por cima do idle ou do passo,
+    // em vez de substituir. Por isso ele NAO dispensa o recuo procedural acima
+    // — os dois falam de coisas diferentes.
+    this.models.get(this.current)?.animator?.shoot(intervalo);
   }
 
   /** Inclina a arma pro lado pra onde o padrao esta' puxando. */
@@ -343,7 +354,11 @@ export class ViewModel {
     this.recoilRoll = clamp(this.recoilRoll + yaw * KICK_ROLL, -KICK_ROLL_MAX, KICK_ROLL_MAX);
   }
 
-  onReloadStart(): void { this.reloadAmount = 1; }
+  onReloadStart(duracao: number): void {
+    const animator = this.models.get(this.current)?.animator;
+    animator?.reload(duracao);
+    this.reloadAmount = animator?.has('reload') ? 0 : 1;
+  }
 
   update(
     dt: number,
@@ -385,20 +400,28 @@ export class ViewModel {
     this.swayX = THREE.MathUtils.clamp(this.swayX, -SWAY_LIMIT, SWAY_LIMIT);
     this.swayY = THREE.MathUtils.clamp(this.swayY, -SWAY_LIMIT, SWAY_LIMIT);
 
-    // recarga: a arma desce e gira pra fora
-    this.reloadAmount = opts.reloading
-      ? Math.sin(opts.reloadProgress * Math.PI)
+    // Recarga procedural: a arma desce e gira pra fora. E' o plano B — com um
+    // clipe de recarga de verdade no modelo, os dois somados dariam a arma
+    // mergulhando enquanto a mao ja' troca o pente.
+    const temClipeRecarga = this.models.get(this.current)?.animator?.has('reload') ?? false;
+    this.reloadAmount = temClipeRecarga ? 0
+      : opts.reloading ? Math.sin(opts.reloadProgress * Math.PI)
       : damp(this.reloadAmount, 0, 10, dt);
 
-    // Modelo com esqueleto precisa do mixer avancando, senao congela na pose de
-    // repouso — que no AK e' a arma com um pente solto flutuando do lado. So' a
-    // arma na mao: as outras estao invisiveis e nao pagam nada.
+    // Modelo com esqueleto precisa da animacao avancando, senao congela na pose
+    // de repouso — que no AK e' a arma com um pente solto flutuando do lado.
+    // So' a arma na mao: as outras estao invisiveis e nao pagam nada.
     const modelo = this.models.get(this.current);
-    if (modelo?.mixer) {
-      modelo.mixer.update(dt);
+    if (modelo?.animator) {
+      modelo.animator.update(dt, opts.moveSpeed01, opts.grounded);
       // A animacao acabou de reescrever a pose de todos os ossos que ela toca,
-      // inclusive os que devem ficar escondidos. Zerar de novo, depois dela.
-      if (modelo.hidden) esconder(modelo.hidden);
+      // inclusive os que devem ficar escondidos — entao esconder vem DEPOIS
+      // dela. A excecao e' a recarga: e' justamente o pente escondido que o
+      // clipe encaixa na arma, entao durante ela ele precisa aparecer.
+      if (modelo.hidden) {
+        if (modelo.animator.recarregando) mostrar(modelo.hidden);
+        else esconder(modelo.hidden);
+      }
     }
 
     // troca de arma: sobe da parte de baixo da tela
@@ -442,5 +465,8 @@ export class ViewModel {
 
   dispose(): void {
     for (const d of this.disposables) d.dispose();
+    // O mixer guarda referencia pros ossos; sem soltar, o recarregamento a
+    // quente do dev empilha uma animacao por cima da outra.
+    for (const m of this.models.values()) m.animator?.dispose();
   }
 }
