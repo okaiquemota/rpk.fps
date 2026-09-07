@@ -444,7 +444,7 @@ export class ViewModel {
     // So' a arma na mao: as outras estao invisiveis e nao pagam nada.
     const modelo = this.models.get(this.current);
     if (modelo?.animator) {
-      modelo.animator.update(dt, opts.moveSpeed01, opts.grounded);
+      modelo.animator.update(dt, opts.moveSpeed01, opts.grounded, opts.adsAmount);
       // A animacao acabou de reescrever a pose de todos os ossos que ela toca,
       // inclusive os que devem ficar escondidos — entao esconder vem DEPOIS
       // dela. A excecao e' a recarga: e' justamente o pente escondido que o

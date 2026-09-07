@@ -32,6 +32,26 @@ const ANDANDO = 0.12;
 const CORRENDO = 0.72;
 /** Tempo de crossfade entre poses de base. */
 const FADE = 0.15;
+/**
+ * Quanto da respiracao do `idle` sobra na MIRA.
+ *
+ * O clipe parado nao e' parado: e' um ciclo de respiracao de 4.2 s. No quadril
+ * ele da' vida a` arma; na mira ele move o ferro de mira ~5% da altura da tela,
+ * e ai' vira exatamente o que atrapalha — a arma nunca esta' onde estava.
+ *
+ * Da' pra atenuar isso com o PESO da acao, e nao com um mecanismo novo, por
+ * causa de dois fatos medidos nas trilhas do arquivo:
+ *
+ * - **so' o `Bone_00` se mexe no idle.** Todas as outras trilhas do clipe tem
+ *   amplitude 0.0000 — o balanco e' a arma inteira como corpo rigido, e nao uma
+ *   pose que se perde ao baixar o peso;
+ * - **o movimento PARTE do bind pose** (amplitude 0.1317 e distancia maxima do
+ *   bind 0.1317, o mesmo numero). Como o three completa o peso que falta com o
+ *   bind pose, peso 0.25 e' literalmente 25% da amplitude, sem deformar nada.
+ *
+ * Zero seria arma congelada, que le' como bug. Um quarto ainda se percebe.
+ */
+const RESPIRO_NA_MIRA = 0.25;
 
 export class WeaponAnimator {
   private mixer: THREE.AnimationMixer;
@@ -143,7 +163,7 @@ export class WeaponAnimator {
     return chave === 'shoot' ? !!this.atirar : this.acoes.has(chave);
   }
 
-  update(dt: number, moveSpeed01: number, grounded: boolean): void {
+  update(dt: number, moveSpeed01: number, grounded: boolean, adsAmount = 0): void {
     // Enquanto saca ou recarrega, a base nao muda: trocar de idle pra andar no
     // meio de uma recarga corta a recarga.
     if (!this.unico) {
@@ -151,6 +171,15 @@ export class WeaponAnimator {
         : moveSpeed01 < CORRENDO ? 'walk' : 'run';
       if (alvo !== this.baseAtual) this.trocarBase(alvo, FADE);
     }
+
+    // Amplitude da base cai ao mirar (ver RESPIRO_NA_MIRA).
+    //
+    // Mexe em `weight` e NAO em `setEffectiveWeight`: o segundo chama
+    // `stopFading()`, o que mataria um crossfade em andamento — trocar de idle
+    // pra andar no meio da mira viraria um salto de pose. O peso do crossfade e'
+    // multiplicado POR CIMA deste, entao os dois convivem.
+    if (this.base) this.base.weight = 1 - adsAmount * (1 - RESPIRO_NA_MIRA);
+
     this.mixer.update(dt);
   }
 

@@ -100,7 +100,7 @@ export const SPECS: Record<WeaponId, ModelSpec> = {
   // orientacao errada.
   rifle: {
     url: rifleUrl, length: 0.62, offset: [-0.12, 0.105, 0.19],
-    adsOffset: [0.126, -0.1, -0.06], yaw: 0,
+    adsOffset: [0.123, -0.093, -0.06], yaw: 0,
     // Os cartuchos do modelo (`Bone004_04` e `Bone005_05`) ficam VISIVEIS: sao
     // eles que a animacao cospe pela janela de ejecao, presos ao movimento da
     // arma. A capsula do jogo continua existindo, mas o papel dela agora e'

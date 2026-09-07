@@ -136,14 +136,36 @@ E os dois nao sao independentes: `adsOffset` e' somado POR CIMA do `offset`,
 entao mexer no enquadramento do quadril desloca a mira junto e obriga a
 recalcular o `adsOffset` pra manter a visada onde estava.
 
-**Baixar a arma na mira DESALINHA o ferro do reticulo.** O fuzil hoje esta' com a
-boca do cano projetando 3.56 graus ABAIXO do centro da tela na mira — foi um
-pedido explicito de enquadramento, nao um descuido. Como a mira do HUD continua
-visivel durante o ADS e e' ELA que diz onde a bala vai, o ferro do modelo virou
-decoracao: quem apontar pelo ferro erra pra baixo (1.2 m a 20 m). Se um dia isso
-incomodar, ha' dois caminhos — devolver o `adsOffset[1]` ate' a boca voltar pra
-NDC y ~0, ou esconder a mira do HUD no ADS e alinhar o ferro, que e' o que os
-FPS de referencia fazem. Meca com a projecao do `muzzlePoint`, nao no olho.
+**O ferro do fuzil esta' alinhado com a mira do HUD** — a ponta da massa de mira
+cai em NDC (0.0001, -0.0006) na media do ciclo de respiracao, ou seja, no centro
+da tela. Isso substitui um enquadramento anterior em que a arma ficava 3.56 graus
+mais baixa; o `adsOffset` do fuzil e' [0.123, -0.093, -0.06].
+
+**Nao ajuste isso por tentativa.** Duas medidas resolvem em uma rodada:
+
+1. a posicao MEDIA do ferro em NDC sobre um ciclo inteiro do `idle` (4.17 s) — a
+   pose instantanea oscila e leva a corrigir o ruido em vez do erro;
+2. a DERIVADA do NDC em relacao ao `adsOffset`, sondada no proprio jogo
+   (medida: 2.31 de NDC y por metro, 1.30 de NDC x por metro — nao sao iguais,
+   porque X e Y sao divididos pelo mesmo Z mas o NDC x ainda passa pelo aspect).
+
+Com as duas, a correcao e' `-media / derivada`. Foi assim: media (0.0040,
+-0.0168) -> correcao (-0.0031, +0.0073) -> resultado (0.0001, -0.0006).
+
+**O que NAO da' pra alinhar e' o resto do ferro.** So' o poste da frente cai no
+centro; a alca de mira e o receptor continuam abaixo dele, e nao ha' `adsOffset`
+que junte os dois. A razao e' geometrica: a linha de mira e' paralela ao eixo da
+camera, entao ela so' cruza o olho se a ALTURA dela for exatamente zero — e a
+alca deste modelo esta' 1.7 cm abaixo do poste na escala da cena. Juntar os dois
+exigiria inclinar o cano ~8 graus pra baixo (medido pelas alavancas de pitch),
+o que poe o cano apontando visivelmente abaixo do alvo. Poste no centro e' o
+compromisso: e' o elemento com que se aponta, e e' o que fica sob a mira do HUD.
+
+**Armadilha na medicao: o `muzzlePoint` NAO acompanha a animacao.** Ele e' um
+`Object3D` fixo no rig, irmao do modelo — os ossos se mexem e ele nao. Medir a
+respiracao por ele devolve amplitude ZERO, que parece "animacao desligada" e nao
+e'. Pra medir movimento, sonde um OSSO (ou um vertice com `applyBoneTransform`);
+o `muzzlePoint` so' serve pra onde o clarao e o tracer saem.
 
 **So' o fuzil esta' calibrado** (quadril e mira). As outras cinco tem
 `adsOffset: [0, 0, 0]` e seguem no enquadramento antigo — calibrar cada uma e'
@@ -240,6 +262,22 @@ Depois de corrigido, o clipe continua fazendo efeito: um ponto de prova no osso
 do ferrolho oscila 0.0044 parado e 0.0526 atirando, doze vezes mais. Verificar
 que o bug sumiu NAO e' o mesmo que verificar que a animacao ainda roda — meca as
 duas coisas.
+
+**A respiracao do `idle` e' atenuada na MIRA, pelo PESO da acao.** O clipe parado
+nao e' parado: e' um ciclo de 4.2 s que move a arma 4.88% da altura da tela. No
+quadril isso da' vida; na mira e' o que faz o ferro nunca estar onde estava.
+
+Dois fatos medidos nas trilhas do arquivo permitem resolver isso com o peso, e
+nao com um mecanismo novo: **so' o `Bone_00` se mexe no idle** (todas as outras
+trilhas tem amplitude 0.0000 — e' a arma inteira como corpo rigido), e **o
+movimento PARTE do bind pose** (amplitude 0.1317 e distancia maxima do bind
+0.1317, o mesmo numero). Como o three completa o peso que falta com o bind pose,
+peso 0.25 e' literalmente 25% da amplitude, sem deformar pose nenhuma. Medido:
+4.88% da tela no quadril, 1.22% na mira.
+
+Use `acao.weight`, e NAO `setEffectiveWeight`: o segundo chama `stopFading()` e
+mataria um crossfade em andamento — trocar de idle pra andar no meio da mira
+viraria um salto de pose. O peso do crossfade multiplica POR CIMA desse.
 
 **A duracao nunca e' a do arquivo.** O clipe de recarga tem 2.67 s e o
 `reloadTime` do fuzil e' 1.75 — tocado na velocidade do arquivo, a arma estaria
