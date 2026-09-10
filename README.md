@@ -229,9 +229,14 @@ Para ligar num fork:
    aponta para `/src/main.ts`, que o navegador não sabe executar. O resultado é
    uma página crua, sem estilo e sem jogo. (Se isso acontecer, a própria página
    avisa e diz o que corrigir.)
-2. Faça push na branch de publicação (ou rode o workflow à mão pela aba
-   **Actions**)
+2. Faça push na `main` (ou rode o workflow à mão pela aba **Actions**)
 3. O jogo sai em `https://<usuario>.github.io/rpk.fps/`
+
+**Se renomear a branch padrão depois**, confira
+**Settings → Environments → `github-pages` → Deployment branches**: essa regra
+não acompanha a renomeação. Apontando pra uma branch que não existe mais, o
+`build` passa normalmente e o `deploy` é barrado no portão — falha em segundos,
+sem log de passo nenhum, e o site continua na versão anterior.
 
 Servido assim, a página fica no topo do navegador — sem iframe no caminho — e a
 captura do mouse funciona normalmente. É a diferença entre jogar com mira de FPS

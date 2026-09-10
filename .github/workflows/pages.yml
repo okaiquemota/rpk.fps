@@ -2,13 +2,18 @@
 #
 # Antes do primeiro deploy, ligue o Pages em:
 #   Settings > Pages > Build and deployment > Source: "GitHub Actions"
+#
+# O job `deploy` roda no ambiente `github-pages`, que tem uma politica propria de
+# branches em Settings > Environments. Ela NAO acompanha a renomeacao da branch
+# padrao: se apontar pra uma branch que nao existe mais, o build passa, o deploy
+# e' barrado no portao (falha em segundos, sem log de nenhum passo) e o site fica
+# na versao anterior sem nenhum erro visivel no workflow.
 name: Publicar no GitHub Pages
 
 on:
   push:
     branches:
       - main
-      - claude/fps-shooter-game-0denpk
   # Permite publicar manualmente a partir de qualquer branch, pela aba Actions.
   workflow_dispatch:
 
