@@ -1,11 +1,25 @@
 # RPK.FPS
 
-FPS de arena que roda no navegador. Você aguenta ondas de inimigos numa arena
-fechada, com três armas, e o jogo fica mais difícil a cada onda.
+FPS de arena que roda no navegador. Sem engine de jogo, sem instalação, sem
+conta: abre a página e joga. Feito em **TypeScript + Three.js + Vite**, tudo
+escrito à mão.
 
-Feito em **TypeScript + Three.js + Vite**, sem nenhum asset externo: geometria,
-texturas e som são todos gerados por código. O repositório inteiro tem só código —
-nada de baixar modelos, sprites ou `.wav`.
+[![Publicar no GitHub Pages](https://github.com/okaiquemota/rpk.fps/actions/workflows/pages.yml/badge.svg)](https://github.com/okaiquemota/rpk.fps/actions/workflows/pages.yml)
+
+### ▶ [Jogar agora](https://okaiquemota.github.io/rpk.fps/)
+
+[![Uma partida no modo sobrevivencia: a arena ao sol, um inimigo na mira e o fuzil em punho](docs/screenshot.jpg)](https://okaiquemota.github.io/rpk.fps/)
+
+Três modos: aguentar ondas de inimigos, trocar tiro com soldados que atiram de
+volta, ou treinar no campo de tiro. Seis armas, com padrão de recuo
+determinístico — dá pra decorar o desenho de cada uma e compensar puxando o
+mouse ao contrário.
+
+Quase tudo é gerado por código: as texturas são desenhadas em canvas 2D, o som é
+sintetizado em WebAudio e a geometria do mundo é `BoxGeometry`. Os únicos
+arquivos de arte são os seis `.glb` das armas e duas gravações de tiro — e mesmo
+esses são **opcionais**: faltando o arquivo, a arma cai no modelo procedural e o
+som volta pro sintetizado.
 
 ## Rodando
 
@@ -14,31 +28,19 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
-Outros comandos:
+| Comando | O que faz |
+|---|---|
+| `npm run dev` | servidor de desenvolvimento |
+| `npm run build` | typecheck + bundle de produção em `dist/` |
+| `npm run build:single` | `dist/rpk-fps.html` — o jogo inteiro num arquivo só |
+| `npm run preview` | serve o `dist/` (útil pra testar o build) |
+| `npm run typecheck` | só o `tsc`, sem gerar nada |
+| `npm run assets` | quanto pesa cada asset, nos dois formatos de build |
 
-```bash
-npm run build      # typecheck + bundle de produção em dist/
-npm run preview    # serve o dist/ (útil pra testar o build)
-npm run typecheck  # só o tsc, sem gerar nada
-```
-
-## Publicando
-
-O repositório já traz um workflow de GitHub Pages
-(`.github/workflows/pages.yml`). Para ligar:
-
-1. **Settings → Pages → Source: "GitHub Actions"**
-   Não escolha *"Deploy from a branch"*: nesse modo o GitHub serve os arquivos
-   do repositório como estão, e o `index.html` da raiz é o arquivo fonte — ele
-   aponta para `/src/main.ts`, que o navegador não sabe executar. O resultado é
-   uma página crua, sem estilo e sem jogo. (Se isso acontecer, a própria página
-   avisa e diz o que corrigir.)
-2. Faça merge na `main` (ou rode o workflow à mão pela aba **Actions**)
-3. O jogo sai em `https://<usuario>.github.io/rpk.fps/`
-
-Servido assim, a página fica no topo do navegador — sem iframe no caminho — e a
-captura do mouse funciona normalmente. É a diferença entre jogar com mira de FPS
-de verdade e jogar no modo de mira solta.
+**São duas saídas diferentes, e a diferença importa.** `build` gera a pasta
+`dist/` com os assets como arquivos separados — é isso que o GitHub Pages
+publica. `build:single` embute tudo em base64 num HTML só, pra baixar e jogar
+offline com duplo clique; é um extra, não o deploy.
 
 ## Controles
 
@@ -53,8 +55,12 @@ de verdade e jogar no modo de mira solta.
 | `R` | Recarregar |
 | `1` a `6` / scroll | Trocar de arma |
 | Setas | Olhar (alternativa ao mouse) |
-
+| `F` | Tela cheia |
+| `F3` | Painel de diagnóstico (fps, desenhos, renderizador) |
+| `L` | Limpar a parede de padrão (só no campo de tiro) |
 | `Esc` | Pausar |
+
+O menu de pausa tem sensibilidade, campo de visão, volume e escala de resolução.
 
 ### Sobre a captura do mouse
 
@@ -78,17 +84,20 @@ mouse passa a ser o monitor inteiro.
 
 ## Modos
 
-A tela inicial escolhe entre dois:
-
 - **Sobrevivência** — ondas de inimigos, melhorias entre elas, o jogo em si.
-- **Campo de tiro** — sem inimigos, com as seis armas liberadas e munição
-  infinita. Serve para sentir recuo e som, e para comparar armas com número em
-  vez de impressão: uma parede clara registra os impactos e o painel mostra o
+  Você morreu, acabou.
+- **Confronto** — tiroteio contra soldados armados, cinco em campo o tempo
+  todo. Não há ondas nem escalada de vida: a dificuldade é que eles atiram de
+  volta. **Morrer não encerra a partida** — você volta no ponto mais longe de
+  quem está vivo. Quem termina é o placar (25 abates) ou o relógio (5 min), e
+  todas as armas já entram liberadas.
+- **Campo de tiro** — sem inimigos, seis armas liberadas e munição infinita.
+  Serve pra sentir recuo e som, e pra comparar armas com número em vez de
+  impressão: uma parede clara registra os impactos e o painel mostra o
   **agrupamento** (raio médio dos furos em torno do centro deles). `L` limpa a
-  parede para repetir o teste. Há cinco alvos que caem e levantam — três
-  parados a distâncias diferentes e dois em movimento.
-
-Para calibrar: fuzil da cintura agrupa em ~15 cm a 22 m; mirando, em ~3 cm.
+  parede pra repetir o teste. Há marcos no chão a 10, 20 e 30 m, e cinco alvos
+  que caem e levantam — três parados a distâncias diferentes e dois em
+  movimento, pra treinar acompanhamento.
 
 ## Como o jogo funciona
 
@@ -98,9 +107,11 @@ Para calibrar: fuzil da cintura agrupa em ~15 cm a 22 m; mirando, em ~3 cm.
 - **Temperos de onda.** Cerca de uma onda em cada três vem com um modificador:
   *horda* (muitos corredores fracos), *elite* (poucos, duros, valem mais) ou
   *cerco* (atiradores por toda parte). Aparece no HUD ao lado do número da onda.
-- **Melhorias.** Toda onda limpa abre uma escolha entre três cartas — dano,
-  cadência, carregador, vida, colete, roubo de vida, munição por abate. Elas
-  acumulam e valem pela partida inteira; a tela final mostra o que você montou.
+- **Melhorias.** Toda onda limpa abre uma escolha entre três cartas, de um baralho
+  de onze — dano, cadência, recarga, carregador, dispersão, velocidade, vida,
+  roubo de vida, colete por onda, dano em headshot e munição por abate. Elas
+  acumulam (cada uma com um teto próprio) e valem pela partida inteira; a tela
+  final mostra o que você montou.
 - **Armas.** Seis, e cada uma aparece como item na arena numa onda:
   pistola (desde o início), fuzil (2), submetralhadora (3), escopeta (4),
   Desert Eagle (6) e sniper (8). A sniper tem luneta de verdade — mirar troca a
@@ -109,8 +120,8 @@ Para calibrar: fuzil da cintura agrupa em ~15 cm a 22 m; mirando, em ~3 cm.
 - **Vida.** Regenera até 50 depois de 6 segundos sem tomar dano. Passar de 50
   exige kit de vida — que os inimigos dropam e que aparece entre as ondas.
 - **Pontos.** Cada abate vale os pontos do tipo × um multiplicador de combo que
-  sobe a cada morte seguida e zera se você passar 4 segundos sem matar ninguém.
-  Headshot vale 50 extras; limpar a onda N vale N × 100.
+  sobe a cada morte seguida (até 10×) e zera se você passar 4 segundos sem matar
+  ninguém. Headshot vale 50 extras; limpar a onda N vale N × 100.
 - O recorde fica salvo no `localStorage`.
 
 ## Arquitetura
@@ -118,37 +129,50 @@ Para calibrar: fuzil da cintura agrupa em ~15 cm a 22 m; mirando, em ~3 cm.
 ```
 src/
   config.ts             todos os números de tuning num lugar só
-  main.ts               bootstrap + checagem de WebGL
+  main.ts               bootstrap: renderer, modelos e Game, nessa ordem
   core/
     Game.ts             loop principal; conecta todos os sistemas
     Input.ts            teclado, mouse e pointer lock
-    Audio.ts            efeitos sonoros procedurais (WebAudio)
+    Audio.ts            engine de som procedural (WebAudio)
+    ShotSamples.ts      gravações de tiro opcionais, achadas por glob
+    gltf.ts             carregador de .glb (meshopt, Draco, KTX2)
+    gpu.ts              detecta renderização por software e adapta
     math.ts             AABB, raycast, lerp/damp, aleatórios
   world/
-    Level.ts            arena: geometria + colisores + spawns + luzes
+    Level.ts            arena: geometria + colisores + spawns + luzes + céu
     Physics.ts          movimento de personagem com colisão AABB
     Pickups.ts          itens no chão
-    textures.ts         texturas desenhadas em canvas
+    textures.ts         texturas em canvas, com normal e roughness derivados
   player/
     Player.ts           movimento, câmera, vida, arsenal
+    Stats.ts            as melhorias e os multiplicadores que elas mexem
   weapons/
     WeaponDefs.ts       stats das armas
     Weapon.ts           munição, cadência, recarga, dispersão
     Combat.ts           hitscan: quem foi atingido e por quanto
     ViewModel.ts        a arma na tela (bob, sway, recuo, recarga)
+    WeaponModels.ts     carrega os .glb e os entrega prontos ao ViewModel
+    WeaponAnimator.ts   toca os clipes que vêm dentro do modelo
   enemies/
     EnemyTypes.ts       stats dos inimigos
     Enemy.ts            IA, animação e estado de um inimigo
     EnemyManager.ts     ondas, spawn e resolução de ataques
     Projectile.ts       projéteis dos atiradores
-  fx/Effects.ts         tracers, impactos, sangue, decals, screen shake
+  modes/
+    ShootingRange.ts    campo de tiro: alvos, parede de padrão, agrupamento
+  fx/Effects.ts         tracers, impactos, sangue, decals, cápsulas, shake
   ui/
     HUD.ts              HUD em DOM
     Screens.ts          menus, opções e persistência
+    Minimap.ts          minimapa em canvas
+    Compass.ts          bússola em canvas
+    WorldMarkers.ts     número de dano e vida do inimigo, em DOM
+    PerfMeter.ts        o painel do F3
+    weaponIcons.ts      silhuetas das armas, traçadas dos próprios modelos
     style.css
 ```
 
-Algumas decisões que valem ser explicadas:
+## Decisões que valem explicar
 
 - **Tudo colide como AABB.** Sem engine de física. `moveCharacter` resolve um
   eixo por vez, o que dá deslizamento em parede e subida de degrau de graça.
@@ -162,43 +186,95 @@ Algumas decisões que valem ser explicadas:
 - **As melhorias são multiplicadores num só objeto** (`Stats`), que as armas e o
   jogador consultam. Uma melhoria nova não toca no balanceamento, e o
   balanceamento não precisa saber que melhorias existem.
+- **O relevo e a rugosidade das superfícies saem do próprio albedo**, separados
+  por frequência: detalhe fino (junta, nervura, rebite) vira normal map, mancha
+  larga (óleo, ferrugem escorrida) vira roughness. Nada é desenhado duas vezes.
+- **Um sol só, e o céu como environment map.** `SUN_DIR` é a única fonte da
+  direção: a luz direcional, o disco no céu e os reflexos leem do mesmo vetor.
+  Separados, o céu mostrava o sol num canto e a sombra caía pro outro.
 - **Cada tiro são quatro camadas** — estalo, corpo, grave e ferrolho — passando
   por saturação e por um reverb de convolução com resposta de impulso gerada em
-  código. É o que separa "bip" de tiro.
+  código. É o que separa "bip" de tiro. Havendo gravação em `assets/sounds/`,
+  ela entra no lugar das camadas, pelo mesmo caminho de espacialização.
 - **O padrão de recuo é determinístico**, não aleatório: dá para decorar o
-  desenho de cada arma e compensar puxando o mouse ao contrário.
+  desenho de cada arma e compensar puxando o mouse ao contrário. E o recuo é um
+  offset somado à mira, nunca uma alteração do `pitch`/`yaw` do jogador — por
+  isso ele volta sozinho quando a rajada acaba.
 - **Som do mundo é posicional.** Tiro de inimigo, passo, morte e impacto passam
   por um `PannerNode` e chegam do lado certo; o que é seu (tiro, recarga, seus
   passos) vai direto pro master.
 - **Pools pré-alocados em tudo que é efeito.** Um tiro de escopeta gera 9
   impactos no mesmo frame; alocar nesse momento é engasgo de GC na hora errada.
-- **Faísca e fumaça são duas camadas de partículas separadas**, porque querem
-  blending diferente: faísca soma luz, fumaça cobre o que está atrás.
 - **A quantidade de luzes da cena nunca muda depois que o jogo carrega**, e os
   shaders são todos compilados na tela inicial. Os dois detalhes existem pelo
   mesmo motivo: no three, qualquer um deles fora de hora trava o frame.
+- **Os ícones das armas no HUD são traçados dos próprios `.glb`**, não
+  desenhados no olho — o que vai no bundle são coordenadas, então o ícone
+  continua existindo sem os modelos.
 
 Durante o jogo, `window.__RPK` expõe a instância do `Game` — dá pra bisbilhotar
 `__RPK.player`, `__RPK.enemies.enemies`, etc. no console do navegador.
 
+## Publicando
+
+O repositório já traz um workflow de GitHub Pages
+(`.github/workflows/pages.yml`), e o jogo está no ar em
+[okaiquemota.github.io/rpk.fps](https://okaiquemota.github.io/rpk.fps/).
+
+Para ligar num fork:
+
+1. **Settings → Pages → Source: "GitHub Actions"**
+   Não escolha *"Deploy from a branch"*: nesse modo o GitHub serve os arquivos
+   do repositório como estão, e o `index.html` da raiz é o arquivo fonte — ele
+   aponta para `/src/main.ts`, que o navegador não sabe executar. O resultado é
+   uma página crua, sem estilo e sem jogo. (Se isso acontecer, a própria página
+   avisa e diz o que corrigir.)
+2. Faça push na branch de publicação (ou rode o workflow à mão pela aba
+   **Actions**)
+3. O jogo sai em `https://<usuario>.github.io/rpk.fps/`
+
+Servido assim, a página fica no topo do navegador — sem iframe no caminho — e a
+captura do mouse funciona normalmente. É a diferença entre jogar com mira de FPS
+de verdade e jogar no modo de mira solta.
+
+## Desempenho
+
+O jogo não é pesado de geometria: algumas dezenas de desenhos e uns 4 mil
+triângulos por quadro. Se o fps estiver ruim, **a primeira coisa a checar é o
+`F3`** — ele mostra o nome do renderizador e acende em vermelho quando o
+navegador caiu pra renderização por software (SwiftShader, llvmpipe, WARP).
+Nesse estado cada pixel sai da CPU, e ligar a aceleração por hardware no
+navegador resolve o que nenhuma otimização resolveria. Detectado o caso, o jogo
+já nasce adaptado: resolução em 50% e sem antialiasing.
+
+Fora isso, o custo é **por pixel**, não por objeto: a escala de resolução no
+menu de pausa é a alavanca mais forte, porque o custo do quadro cresce com a
+área.
+
 ## Créditos
 
-Modelos 3D das armas: **Ultimate Guns Pack by Quaternius via Poly Pizza** (CC0).
-Detalhes em [`CREDITS.md`](CREDITS.md).
+**Fuzil: "Ak47", por wburton** — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+via [Sketchfab](https://sketchfab.com/3d-models/ak47-831519a097d84e079fd8bc4b15e5b57d).
+Alterado para o espaço do viewmodel (escala, orientação, enquadramento).
+Esta licença **exige** atribuição — o crédito também aparece na tela inicial do
+jogo.
 
-Todo o resto é gerado por código — texturas em canvas 2D, som em WebAudio,
-geometria em `BoxGeometry`.
+**Outras cinco armas: Ultimate Guns Pack, por Quaternius**, via
+[Poly Pizza](https://poly.pizza) — CC0.
+
+Detalhes e o resto em [`CREDITS.md`](CREDITS.md). Bibliotecas: three.js, Vite e
+TypeScript.
 
 ## Ideias pro próximo fim de semana
 
 Coisas que o código já está preparado pra receber:
 
 - [ ] Mais mapas (`Level` já é uma lista de blocos — dá pra ter várias)
-- [ ] Mais armas (adicionar em `WEAPON_DEFS` + um rig em `ViewModel`)
+- [ ] Mais armas (entrada em `WEAPON_DEFS` + um rig no `ViewModel`)
 - [ ] Granadas / dano em área
 - [ ] Inimigo que voa ou que explode ao morrer
 - [ ] Melhorias raras/lendárias, e melhorias que mudam como a arma funciona
 - [ ] Chefe a cada dez ondas
-- [ ] Minimapa
 - [ ] Placar online
 - [ ] Suporte a gamepad
+- [ ] Calibrar o enquadramento das outras cinco armas (só o fuzil está feito)
