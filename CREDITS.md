@@ -40,6 +40,16 @@ Bibliotecas: [three.js](https://threejs.org) (MIT), [Vite](https://vite.dev)
 
 ## Sons
 
-Sem arquivos de audio no momento — todo o som e' sintetizado em WebAudio
-(`src/core/Audio.ts`). A pasta `assets/sounds/` aceita gravacoes opcionais de
-tiro; ao por alguma, credite aqui com autor, origem e licenca.
+A base e' sintetizada em WebAudio (`src/core/Audio.ts`) e nao tem credito a dar.
+Por cima dela, `assets/sounds/` aceita gravacoes que substituem o som de uma
+arma; hoje ha' duas:
+
+| arquivo      | usado em                | autor | origem | licenca |
+|--------------|-------------------------|-------|--------|---------|
+| `rifle.wav`  | disparo do fuzil        | ?     | ?      | ?       |
+| `balas.wav`  | capsula batendo no chao | ?     | ?      | ?       |
+
+**ATRIBUICAO PENDENTE.** O repositorio e' publico, entao so' pode ficar aqui
+audio redistribuivel — CC0 de preferencia (ver `assets/sounds/README.md`).
+Preencha a tabela com a procedencia de cada arquivo, ou remova os dois: sem
+arquivo, o tiro volta pro sintetizado e nada quebra.
